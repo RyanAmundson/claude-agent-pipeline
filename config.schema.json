@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agent Pipeline Configuration",
+  "description": "Per-project configuration for the agent-pipeline plugin. Lives at .pipeline/config.json in the host repo.",
+  "type": "object",
+  "required": ["repo", "ghUser", "backend"],
+  "properties": {
+    "repo": {
+      "type": "string",
+      "description": "GitHub repo slug, e.g. 'owner/name'. Agents only act on PRs in this repo.",
+      "pattern": "^[^/]+/[^/]+$"
+    },
+    "ghUser": {
+      "type": "string",
+      "description": "GitHub username whose PRs the pipeline will act on. Other authors (Dependabot, bots, contributors) are skipped."
+    },
+    "backend": {
+      "type": "string",
+      "enum": ["linear", "filesystem"],
+      "description": "Where tickets live. 'linear' uses the user's Linear MCP integration; 'filesystem' uses .pipeline/queue/ as a local ticket store."
+    },
+    "linear": {
+      "type": "object",
+      "description": "Required when backend='linear'.",
+      "properties": {
+        "teamId": { "type": "string", "description": "Linear team ID or key (e.g. 'CER')." },
+        "projectFilter": { "type": "string", "description": "Optional project name or ID to scope tickets." },
+        "excludeProjects": { "type": "array", "items": { "type": "string" } },
+        "excludeLabels": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "filesystem": {
+      "type": "object",
+      "description": "Required when backend='filesystem'.",
+      "properties": {
+        "queueDir": {
+          "type": "string",
+          "default": ".pipeline/queue",
+          "description": "Directory where ticket JSON files live. State is encoded by subdirectory (needs-work, in-progress, done, etc.)."
+        }
+      }
+    },
+    "labelNamespace": {
+      "type": "string",
+      "default": "pipeline",
+      "description": "Prefix for pipeline state labels. Default: 'pipeline:needs-work', 'pipeline:ready-for-human', etc."
+    },
+    "agentLabelNamespace": {
+      "type": "string",
+      "default": "agent",
+      "description": "Prefix for agent provenance labels. Default: 'agent:worker', 'agent:tester', etc."
+    },
+    "verify": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["npm run type-check", "npm run lint"],
+      "description": "Shell commands the worker runs to verify a change before opening a PR. Stop here — agents must NOT run tests (orphaned process risk)."
+    },
+    "branchPrefix": {
+      "type": "string",
+      "default": "fix/",
+      "description": "Prefix for branches the worker creates."
+    },
+    "worktreeRoot": {
+      "type": "string",
+      "default": ".worktrees",
+      "description": "Directory (relative to repo root) where the worker creates isolated git worktrees."
+    },
+    "lessonsDir": {
+      "type": "string",
+      "default": ".pipeline/lessons",
+      "description": "Where the orchestrator writes self-audit lessons that compound across cycles."
+    },
+    "rulesDir": {
+      "type": "string",
+      "default": ".pipeline/rules",
+      "description": "Directory of project-specific rule files (markdown) the scanner reads. Empty = scanner only checks generic categories."
+    },
+    "glossaryPath": {
+      "type": "string",
+      "default": "docs/glossary.md",
+      "description": "Path to the project glossary the glossary-maintainer keeps current."
+    },
+    "maxAgentsPerCycle": { "type": "integer", "default": 5, "minimum": 1 },
+    "maxWorktrees": { "type": "integer", "default": 10, "minimum": 1 },
+    "readyQueueSaturation": {
+      "type": "integer",
+      "default": 25,
+      "description": "When 'ready-for-human' has this many open PRs, the orchestrator stops dispatching detectors — the human is the bottleneck."
+    },
+    "humanReviewer": {
+      "type": "string",
+      "description": "GitHub handle of the human who reviews and merges PRs. The pipeline routes 'ready-for-human' PRs to this reviewer."
+    }
+  }
+}

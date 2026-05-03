@@ -1,0 +1,8 @@
+.git/
+.github/
+node_modules/
+docs/
+.DS_Store
+*.log
+*.tmp
+.pipeline/

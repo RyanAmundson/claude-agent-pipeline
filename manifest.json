@@ -1,0 +1,96 @@
+{
+  "$schema": "./manifest.schema.json",
+  "version": "0.2.0",
+  "description": "Static manifest of every agent and rule shipped by agent-pipeline, plus the external dependencies each agent needs at runtime. The CLI reads this to filter installs to what your environment supports.",
+  "deps": {
+    "github": {
+      "label": "GitHub CLI (`gh`)",
+      "detect": "command -v gh",
+      "purpose": "Read PRs, post comments, edit labels, create branches"
+    },
+    "linear": {
+      "label": "Linear MCP",
+      "detect": "manual",
+      "purpose": "Fetch tickets, transition status, post Linear comments"
+    },
+    "playwright": {
+      "label": "Playwright (project devDependency)",
+      "detect": "package-json",
+      "packageName": "@playwright/test",
+      "purpose": "Run E2E specs, author Playwright tests"
+    },
+    "agent-browser": {
+      "label": "agent-browser CLI",
+      "detect": "command -v agent-browser",
+      "purpose": "Drive a real Chrome browser for runtime audits"
+    },
+    "chrome-devtools": {
+      "label": "chrome-devtools MCP",
+      "detect": "manual",
+      "purpose": "Click/inspect a running browser tab from inside Claude Code"
+    }
+  },
+  "agents": {
+    "orchestrator":                   { "stage": "meta",           "requires": ["github"], "optional": ["linear"] },
+    "scanner":                        { "stage": "intake",         "requires": [] },
+    "ticket-creator":                 { "stage": "intake",         "requires": [], "optional": ["linear"] },
+    "ticket-reviewer":                { "stage": "routing",        "requires": [], "optional": ["linear"] },
+    "flex-worker":                    { "stage": "routing",        "requires": ["github"], "optional": ["linear"] },
+    "linear-issue-orchestrator":     { "stage": "routing",        "requires": ["linear"] },
+    "worker":                         { "stage": "implementation", "requires": ["github"], "optional": ["linear"] },
+    "declarative-refactor-specialist":{ "stage": "implementation", "requires": ["github"] },
+    "folder-structure-enforcer":      { "stage": "implementation", "requires": ["github"] },
+    "technical-docs-manager":         { "stage": "implementation", "requires": ["github"] },
+    "branch-updater":                 { "stage": "implementation", "requires": ["github"] },
+    "tester":                         { "stage": "quality",        "requires": ["github"] },
+    "e2e-test-quality":               { "stage": "quality",        "requires": ["github", "playwright"] },
+    "e2e-test-runner":                { "stage": "quality",        "requires": ["playwright"] },
+    "ci-triage":                      { "stage": "quality",        "requires": ["github"] },
+    "data-validator":                 { "stage": "quality",        "requires": ["github"] },
+    "code-reviewer":                  { "stage": "review",         "requires": ["github"] },
+    "feedback-responder":             { "stage": "review",         "requires": ["github"] },
+    "cleanup":                        { "stage": "review",         "requires": ["github"] },
+    "a11y-detector":                  { "stage": "detector",       "requires": [], "optional": ["agent-browser", "chrome-devtools"] },
+    "perf-detector":                  { "stage": "detector",       "requires": [], "optional": ["agent-browser", "chrome-devtools"] },
+    "security-detector":              { "stage": "detector",       "requires": [] },
+    "pipeline-violation-detector":   { "stage": "detector",       "requires": [] },
+    "mock-contract-detector":         { "stage": "detector",       "requires": [] },
+    "density-system-detector":        { "stage": "detector",       "requires": [] },
+    "justification-detector":         { "stage": "detector",       "requires": ["github"] },
+    "glossary-maintainer":            { "stage": "utility",        "requires": ["github"] },
+    "context-mapper":                 { "stage": "utility",        "requires": [] },
+    "git-worktree-manager":           { "stage": "utility",        "requires": [] }
+  },
+  "presets": {
+    "minimal": {
+      "description": "Stack-agnostic foundational rules only. Works for any project.",
+      "rules": ["agent-work-protocol.md", "justify-non-standard-additions.md"]
+    },
+    "typescript-react": {
+      "description": "TypeScript / React 19+ / Vite / TanStack Query stack. 12 rules covering data-pipeline, react-query, view-models, naming, etc.",
+      "rules": [
+        "agent-work-protocol.md",
+        "justify-non-standard-additions.md",
+        "presets/typescript-react/canonical-and-composed-hooks.md",
+        "presets/typescript-react/collection-folders.md",
+        "presets/typescript-react/component-hierarchy.md",
+        "presets/typescript-react/data-pipeline.md",
+        "presets/typescript-react/e2e-testing.md",
+        "presets/typescript-react/mock-data-density.md",
+        "presets/typescript-react/naming-conventions.md",
+        "presets/typescript-react/playwright-mcp.md",
+        "presets/typescript-react/react-query.md",
+        "presets/typescript-react/view-models.md"
+      ]
+    },
+    "templates": {
+      "description": "Empty starter rule files; you author your own conventions.",
+      "rules": [
+        "templates/RULES_TEMPLATE.md",
+        "templates/example-no-debug-remnants.md",
+        "templates/example-no-hardcoded-credentials.md",
+        "templates/example-no-silent-error-catching.md"
+      ]
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "agent-pipeline",
+  "version": "0.2.0",
+  "description": "A self-orchestrating multi-agent dev pipeline for Claude Code. Scans for issues, files tickets, implements them, reviews tests and code, and addresses human feedback — all driven by one orchestrator loop. Stack-agnostic core; ships an opinionated TypeScript/React preset.",
+  "author": "Ryan Amundson",
+  "license": "MIT",
+  "agents": "agents/",
+  "commands": "commands/",
+  "skills": "skills/",
+  "rules": "rules/",
+  "manifest": "manifest.json",
+  "configSchema": "config.schema.json",
+  "requires": {
+    "claudeCode": ">=2.0.0",
+    "tools": ["Bash", "Read", "Write", "Edit", "Agent", "Skill"],
+    "optionalMcp": ["linear"]
+  }
+}

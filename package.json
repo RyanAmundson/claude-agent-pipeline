@@ -1,0 +1,49 @@
+{
+  "name": "claude-agent-pipeline",
+  "version": "0.2.0",
+  "description": "A self-orchestrating multi-agent dev pipeline for Claude Code. One orchestrator loop watches a backlog, dispatches specialist agents on demand, and routes work through scan → ticket → implement → review → human-merge. Stack-agnostic; ships an opinionated TypeScript/React preset.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agents",
+    "ai",
+    "pipeline",
+    "orchestration",
+    "automation",
+    "code-review"
+  ],
+  "homepage": "https://github.com/your-org/claude-agent-pipeline",
+  "bugs": "https://github.com/your-org/claude-agent-pipeline/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/claude-agent-pipeline.git"
+  },
+  "license": "MIT",
+  "author": "Ryan Amundson",
+  "type": "module",
+  "bin": {
+    "agent-pipeline": "bin/cli.js",
+    "claude-agent-pipeline": "bin/cli.js"
+  },
+  "files": [
+    "agents/",
+    "rules/",
+    "commands/",
+    "queue/",
+    "skills/",
+    "bin/",
+    "scripts/install-local.sh",
+    "manifest.json",
+    "plugin.json",
+    "config.schema.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node bin/cli.js list-agents > /dev/null && node bin/cli.js list-presets > /dev/null && echo 'cli smoke ok'",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
