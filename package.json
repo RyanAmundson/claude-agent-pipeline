@@ -12,11 +12,11 @@
     "automation",
     "code-review"
   ],
-  "homepage": "https://github.com/your-org/claude-agent-pipeline",
-  "bugs": "https://github.com/your-org/claude-agent-pipeline/issues",
+  "homepage": "https://github.com/RyanAmundson/claude-agent-pipeline",
+  "bugs": "https://github.com/RyanAmundson/claude-agent-pipeline/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-org/claude-agent-pipeline.git"
+    "url": "git+https://github.com/RyanAmundson/claude-agent-pipeline.git"
   },
   "license": "MIT",
   "author": "Ryan Amundson",

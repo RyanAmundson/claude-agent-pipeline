@@ -42,7 +42,7 @@ The installer symlinks the package's `agents/`, `rules/`, and `commands/` into `
 ### Local clone (for development)
 
 ```bash
-git clone https://github.com/your-org/claude-agent-pipeline.git
+git clone https://github.com/RyanAmundson/claude-agent-pipeline.git
 cd claude-agent-pipeline
 node bin/cli.js install ~/Code/my-app
 # or the equivalent shell version:
