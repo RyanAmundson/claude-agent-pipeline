@@ -91,3 +91,18 @@ Examples of out-of-scope findings worth ticketing:
 
 On pass, `pipeline:ready-for-human` means all automated checks are done — ready for the owner.
 On fail, `pipeline:needs-feedback` signals the feedback-responder to address the issues.
+
+---
+
+## Backend: filesystem (GitHub-free)
+
+When `.pipeline/config.json` has `backend: "filesystem"`, do NOT use `gh`:
+
+1. **Pick** a ticket in `needs-code-review/`. Skip any with an existing `author:"code-reviewer"` comment for the current round.
+2. **Pre-flight (human first)**: read the ticket's `comments[]`. A comment with `author:"human"` is **unresolved** if there is no LATER comment with `author:"feedback-responder"` whose body contains "Addressed". If any unresolved human comment exists, do NOT review — move the ticket to feedback: `queue/queue-claim.sh <id> needs-code-review needs-feedback --queue-dir <queueDir>` and stop. Use the "no later Addressed reply" rule, NOT a timestamp cutoff.
+3. **Review the diff**: `git -C <repoRoot> diff <base>...<branch>` against the code-review checklist.
+4. **Post summary + verdict**:
+   `queue/queue-comment.sh <id> --author code-reviewer --verdict pass|fail --body "<summary with specific findings>" --queue-dir <queueDir>`
+5. **Transition**: pass → `queue/queue-claim.sh <id> needs-code-review ready-for-human`; fail → `queue/queue-claim.sh <id> needs-code-review needs-feedback` (both `--queue-dir <queueDir>`).
+
+`ready-for-human/` is the human's queue — the human merges `branch` into `base` and moves the ticket to `done/` manually. Do not merge.

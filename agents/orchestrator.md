@@ -265,3 +265,15 @@ Self-pacing via ScheduleWakeup — no fixed cron. Adjust interval based on pipel
 | Pipeline flowing, all stages covered | 600s |
 | Pipeline idle (all stages empty or awaiting the owner) | 1200s |
 | All PRs ready-for-human, nothing to dispatch | 1800s |
+
+---
+
+## Backend: filesystem (GitHub-free)
+
+When `.pipeline/config.json` has `backend: "filesystem"`, take the pipeline snapshot from the queue, not `gh pr list`:
+
+- **Snapshot** each review stage with `queue/queue-list.sh <state> --queue-dir <queueDir>` (or `agent-pipeline status --json`) and dispatch the matching review agent: `needs-work` → worker, `needs-test-review` → tester, `needs-code-review` → code-reviewer, `needs-feedback` → feedback-responder.
+- **Intake stays Linear-coupled (out of scope for the GitHub-free loop in v1).** `ticket-creator` and `ticket-reviewer` use Linear, so `needs-triage/` and `needs-review/` are not auto-serviced here — in filesystem mode, tickets enter the queue directly in `needs-work/` (scanner output or a human drop). Porting those two agents to filesystem intake is future work.
+- **Unresolved-human-comment scan (every cycle)**: for every ticket in every state, read `comments[]` and flag any `author:"human"` comment with no LATER `author:"feedback-responder"` "Addressed" reply → dispatch `feedback-responder`. Do NOT use a timestamp cutoff. The pipeline is never idle while such a comment exists.
+- **`ready-for-human/`** is the human's queue (merge + move to `done/` manually) — no dispatch.
+- There are no PRs to scan and no `blocked-by:*` GitHub labels; backlog readiness is simply non-empty `needs-work/`.

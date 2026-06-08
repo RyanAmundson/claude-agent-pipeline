@@ -9,6 +9,8 @@
 **Provenance**: `agent:worker`
 **Scope**: ${REPO_SLUG} only. Only Linear tickets in the configured project. PRs authored as `${GH_USER}`.
 
+**Backend-aware:** The Process below describes the GitHub/Linear backend. Read `.pipeline/config.json` first — if `backend: "filesystem"`, follow the **Backend: filesystem** section at the bottom instead of opening a PR.
+
 ## Process
 
 1. Query Linear for issues in Backlog/Todo status, sorted by priority (or with `pipeline:needs-work` label)
@@ -52,3 +54,20 @@
 ## Handoff
 
 The `pipeline:needs-test-review` label on the PR signals the tester agent to review test coverage. Do not self-review — let the tester validate independently.
+
+---
+
+## Backend: filesystem (GitHub-free)
+
+When `.pipeline/config.json` has `backend: "filesystem"`, do NOT use `gh`, do NOT open a PR, and do NOT push. The ticket is the unit of review.
+
+1. **Claim**: `queue/queue-claim.sh <id> needs-work in-progress --queue-dir <queueDir>` (skip the ticket if claim fails — another worker won).
+2. **Worktree + branch** exactly as in step 5a (worktree under `worktreeRoot`, branch `<branchPrefix><id>`), but branch from the local base (`config base` or the repo default branch) and **never push**.
+3. **Implement** the fix and write regression tests. Run the `verify` commands from config (e.g. `npm run type-check && npm run lint`). Do not run the full test suite (orphaned-process risk).
+4. **Record review handles** on the ticket:
+   `queue/queue-update.sh in-progress <id> '.branch="<branch>" | .base="<base>" | .worktree="<path>"' --queue-dir <queueDir>`
+5. **Post provenance** to the ticket:
+   `queue/queue-comment.sh <id> --author worker --body "<what changed; regression test path; verify results>" --queue-dir <queueDir>`
+6. **Hand off**: `queue/queue-claim.sh <id> in-progress needs-test-review --queue-dir <queueDir>`.
+
+The ticket's `comments[]` plus `branch`/`base` ARE the audit trail — there is no PR. The forbidden-commands rule on the main worktree (step 5c) still applies.

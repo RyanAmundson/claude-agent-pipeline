@@ -259,3 +259,24 @@ Always read the source code that changed before evaluating whether tests are suf
 - **Done when**: The PR comment has been posted via `gh pr comment`
 - **Notify**: Console summary of what was reviewed and what was found.
 - **Chain**: If test issues found → `e2e-test-quality` (pass the PR number and list of issues for the agent to fix)
+
+---
+
+## Backend: filesystem (GitHub-free)
+
+When `.pipeline/config.json` has `backend: "filesystem"`, do NOT use `gh`. Review the worker's local branch:
+
+1. **Pick** a ticket in `needs-test-review/` (oldest, highest priority). Skip any whose `comments[]` already contains an `author:"tester"` entry for the current round.
+2. **Read handles**: the ticket's `branch` and `base`.
+3. **Get the diff**:
+   ```bash
+   git -C <repoRoot> diff --name-only <base>...<branch>
+   git -C <repoRoot> diff <base>...<branch>
+   ```
+   Read the changed source files before judging test adequacy (Section 7 still applies).
+4. **Apply** the test-quality checklist (Sections 1–5) to the diff.
+5. **Post findings + verdict**:
+   `queue/queue-comment.sh <id> --author tester --verdict pass|fail --body "<findings, file:line, suggested fixes>" --queue-dir <queueDir>`
+6. **Transition**: pass → `queue/queue-claim.sh <id> needs-test-review needs-code-review`; fail → `queue/queue-claim.sh <id> needs-test-review needs-feedback` (both `--queue-dir <queueDir>`).
+
+**Idle**: if `needs-test-review/` is empty, stop. The output-format sections (3) still describe the comment body; post it to the ticket, not a PR.

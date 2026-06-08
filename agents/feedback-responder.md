@@ -220,3 +220,18 @@ If the owner's comments contradict each other or contradict a previous approval,
 - **Done when**: Every comment from the owner has an agent reply, and the PR is re-labeled `ready-for-review`
 - **Notify**: Print summary of comments addressed and PRs updated.
 - **Chain**: None — feedback response is a terminal task. the owner reviews again.
+
+---
+
+## Backend: filesystem (GitHub-free)
+
+When `.pipeline/config.json` has `backend: "filesystem"`, monitor the ticket queue instead of PR threads:
+
+1. **Scan** every ticket (all state subdirs) for `comments[]` entries with `author:"human"` that are **unresolved** — i.e. have no LATER comment with `author:"feedback-responder"` whose body contains "Addressed". Use the "no later Addressed reply" rule, NOT a timestamp cutoff.
+2. For each unresolved human comment: address it (make the change directly, or dispatch a worker) or reply asking for clarification.
+3. **Record resolution** on the ticket:
+   `queue/queue-comment.sh <id> --author feedback-responder --body "Addressed: <what you did or what you need>" --queue-dir <queueDir>`
+4. If the comment requires code changes, move the ticket back so a worker re-implements:
+   `queue/queue-claim.sh <id> <current-state> needs-work --queue-dir <queueDir>` (the worker re-enters the loop and re-records `branch`/comments).
+
+The pipeline is NEVER idle while an unresolved human comment exists, regardless of the ticket's state.
