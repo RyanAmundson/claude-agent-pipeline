@@ -7,10 +7,13 @@
 # Example:
 #   queue-update.sh in-progress CER-123 '.pr_url = "https://github.com/owner/repo/pull/42"'
 #
-# Wraps the read-modify-write in flock(1) so concurrent updates serialize.
+# Wraps the read-modify-write in flock(1) so concurrent updates serialize when
+# flock is available; falls back to a plain atomic tmp->rename when it is absent
+# (e.g. macOS), losing only cross-process serialization — single-writer use is
+# still safe. Mirrors queue-comment.sh.
 # Within a single state, claiming + updating + transitioning compose safely:
 # - claim is `mv` (atomic)
-# - update is flock + jq (serialized)
+# - update is flock + jq when available, else jq + atomic rename (serialized)
 # - transition is `mv` (atomic)
 
 set -euo pipefail
@@ -50,11 +53,17 @@ fi
 mkdir -p "$QUEUE_DIR"
 touch "$LOCK"
 
-(
-    flock -x 200
-    TMP="$FILE.tmp.$$"
-    jq "$EXPR" "$FILE" > "$TMP"
-    mv "$TMP" "$FILE"
-) 200>"$LOCK"
+_apply() {
+    local file="$1"
+    local tmp="$file.tmp.$$"
+    jq "$EXPR" "$file" > "$tmp"
+    mv "$tmp" "$file"
+}
+
+if command -v flock >/dev/null 2>&1; then
+    ( flock -x 200; _apply "$FILE" ) 200>"$LOCK"
+else
+    _apply "$FILE"
+fi
 
 echo "updated: $ID"
