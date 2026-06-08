@@ -1,6 +1,6 @@
 {
   "name": "claude-agent-pipeline",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A self-orchestrating multi-agent dev pipeline for Claude Code. One orchestrator loop watches a backlog, dispatches specialist agents on demand, and routes work through scan → ticket → implement → review → human-merge. Stack-agnostic; ships an opinionated TypeScript/React preset.",
   "keywords": [
     "claude",
