@@ -52,11 +52,20 @@ node bin/cli.js install ~/Code/my-app
 ## CLI
 
 ```
-agent-pipeline install <target> [options]   Install agents/rules/commands into a project
-agent-pipeline list-agents [--target <p>]   List agents and dep status
-agent-pipeline list-presets                 List rule presets
-agent-pipeline detect [--target <p>]        Detect available deps in target environment
-agent-pipeline version                      Print version
+agent-pipeline install <target> [options]      Install agents/rules/commands into a project
+agent-pipeline list-agents [--target <p>]      List agents and dep status
+agent-pipeline list-presets                    List rule presets
+agent-pipeline detect [--target <p>]           Detect available deps in target environment
+agent-pipeline version                         Print version
+
+# Dispatch & observability — see docs/API.md for full reference
+agent-pipeline run <agent> --prompt "..." [--target <p>] [--wait|--detach|--follow] [--json]
+agent-pipeline runs [--target <p>] [--json]                   List active + recent runs
+agent-pipeline runs <runId> [--target <p>] [--follow] [--json]   Inspect / tail a run
+agent-pipeline runs <runId> events [--target <p>] [--json]    Dump captured event log
+agent-pipeline runs kill <runId> [--target <p>]               Terminate a running supervisor
+agent-pipeline events [--target <p>] [--json]                 Live pipeline event stream (JSONL)
+agent-pipeline ui [--target <p>] [--port N] [--open]          Launch dashboard + HTTP/SSE API
 ```
 
 ### Install flags
@@ -88,6 +97,52 @@ Each agent declares the external systems it needs. The CLI detects what's availa
 | `chrome-devtools` | manual | a11y/perf detectors (runtime audits) |
 
 Run `agent-pipeline detect --target ~/Code/my-app` to see the report without installing.
+
+## Dispatch & observability
+
+The pipeline can be driven entirely from the orchestrator agent (the original use case), but every agent is also independently dispatchable from a host tool — CLI, Node, or HTTP.
+
+```bash
+# Dispatch an agent, get back a runId immediately
+RES=$(agent-pipeline run scanner \
+  --prompt "Scan src/ for silent error handlers" \
+  --target ~/Code/my-app \
+  --max-budget-usd 0.30 \
+  --detach --json)
+RUN_ID=$(echo "$RES" | jq -r .runId)
+
+# Watch it
+agent-pipeline runs "$RUN_ID" --follow --target ~/Code/my-app
+
+# Kill it
+agent-pipeline runs kill "$RUN_ID" --target ~/Code/my-app
+```
+
+State lives at `<target>/.pipeline/runs/{active,completed,logs}/`. Multiple consumers (CLI tail, dashboard, host-app subscribers) can observe the same project concurrently.
+
+**Three subscription surfaces:**
+
+```js
+// 1. Node (in-process, push-based)
+import { createWatcher } from 'claude-agent-pipeline/api';
+const w = createWatcher({ target });
+w.on('run.complete', ev => console.log(ev.run.runId, ev.run.cost));
+```
+
+```bash
+# 2. CLI (JSONL on stdout, language-agnostic)
+agent-pipeline events --target ~/Code/my-app --json | jq .
+```
+
+```js
+// 3. HTTP / SSE (remote / browser)
+const es = new EventSource('http://127.0.0.1:7733/api/v1/events');
+es.onmessage = ({ data }) => handle(JSON.parse(data));
+```
+
+Full reference: [`docs/API.md`](./docs/API.md). Types: [`api/index.d.ts`](./api/index.d.ts).
+
+A self-contained demo script that exercises the full dispatch / query / follow / kill loop lives at [`scripts/demo-run-loop.sh`](./scripts/demo-run-loop.sh).
 
 ## First-run setup
 
@@ -191,9 +246,14 @@ This repo is both:
 The CLI is a single Node file with no runtime deps. Smoke-test via:
 
 ```bash
-npm test         # CLI smoke test
-npm run pack:dry # show what would ship to npm
+npm test                  # CLI smoke test (no model spend)
+npm run test:e2e:smoke    # E2E: lifecycle / kill / events surface (no model spend)
+npm run test:e2e          # E2E: smoke + skipped live tests
+CAP_E2E_LIVE=1 npm run test:e2e  # E2E: includes real-claude pipeline tests (~$3)
+npm run pack:dry          # show what would ship to npm
 ```
+
+The E2E suite lives in `test/e2e/` with a seeded fixture under `test/fixtures/full-pipeline/`. See [`test/e2e/README.md`](./test/e2e/README.md) for what each test covers and how to add new scenarios.
 
 ## License
 

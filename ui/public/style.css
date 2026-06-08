@@ -1,0 +1,64 @@
+:root {
+  --bg: #0f1115;
+  --panel: #161a22;
+  --line: #262c3a;
+  --text: #d4d8e0;
+  --dim: #6e7587;
+  --accent: #7dcfff;
+  --ok: #9ece6a;
+  --err: #f7768e;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg); color: var(--text);
+  font: 13px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+body { display: flex; flex-direction: column; }
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+header h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.5px; }
+.dim { color: var(--dim); font-weight: 400; }
+.controls { display: flex; align-items: center; gap: 16px; }
+.controls label { color: var(--dim); cursor: pointer; user-select: none; }
+.controls input[type=checkbox] { vertical-align: -2px; margin-right: 4px; }
+.controls button {
+  background: transparent; color: var(--dim); border: 1px solid var(--line);
+  padding: 4px 10px; border-radius: 4px; cursor: pointer; font: inherit;
+}
+.controls button:hover { color: var(--text); border-color: var(--text); }
+.status { color: var(--dim); }
+.status.ok { color: var(--ok); }
+.status.err { color: var(--err); }
+
+main {
+  flex: 1; min-height: 0; padding: 0;
+  display: flex; flex-direction: column;
+}
+#log {
+  flex: 1; min-height: 0;
+  margin: 0; padding: 8px 16px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font: inherit;
+}
+.line {
+  display: block;
+  padding: 1px 0;
+  border-bottom: 1px solid transparent;
+}
+.line:hover { background: rgba(255,255,255,0.02); }
+.line .time { color: var(--dim); margin-right: 12px; }
+.line .runid { color: var(--dim); margin-right: 8px; opacity: 0.6; }
+.line .agent { display: inline-block; margin-right: 8px; }
+.line .type { color: var(--dim); margin-right: 4px; }
+.line .body { color: var(--text); }
+
+.line.type-result .body { color: var(--ok); }
+.line.type-system .body { color: var(--dim); }
+.line.type-user .body { color: var(--dim); }

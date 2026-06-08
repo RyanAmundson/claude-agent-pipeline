@@ -1,0 +1,8 @@
+{
+  "repo": "ap-e2e/fixture",
+  "ghUser": "ap-e2e-bot",
+  "backend": "filesystem",
+  "filesystem": { "queueDir": ".pipeline/queue" },
+  "verify": ["npm run type-check", "npm run lint"],
+  "branchPrefix": "ap-e2e/"
+}

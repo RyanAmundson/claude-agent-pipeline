@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-pipeline — live log</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>agent-pipeline <span class="dim">live</span></h1>
+  <div class="controls">
+    <label><input type="checkbox" id="autoscroll" checked> auto-scroll</label>
+    <label><input type="checkbox" id="show-system"> system events</label>
+    <button id="clear">clear</button>
+    <span id="status" class="status">connecting…</span>
+  </div>
+</header>
+<main>
+  <pre id="log" aria-live="polite"></pre>
+</main>
+<script src="/app.js" type="module"></script>
+</body>
+</html>

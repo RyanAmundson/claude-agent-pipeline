@@ -25,6 +25,13 @@
     "agent-pipeline": "bin/cli.js",
     "claude-agent-pipeline": "bin/cli.js"
   },
+  "exports": {
+    "./api": {
+      "types": "./api/index.d.ts",
+      "import": "./api/index.js"
+    }
+  },
+  "types": "./api/index.d.ts",
   "files": [
     "agents/",
     "rules/",
@@ -32,6 +39,9 @@
     "queue/",
     "skills/",
     "bin/",
+    "api/",
+    "ui/",
+    "runner/",
     "scripts/install-local.sh",
     "manifest.json",
     "plugin.json",
@@ -41,6 +51,8 @@
   ],
   "scripts": {
     "test": "node bin/cli.js list-agents > /dev/null && node bin/cli.js list-presets > /dev/null && echo 'cli smoke ok'",
+    "test:e2e:smoke": "bash test/e2e/01-lifecycle-smoke.sh",
+    "test:e2e": "bash test/e2e/run-all.sh",
     "pack:dry": "npm pack --dry-run"
   },
   "engines": {
