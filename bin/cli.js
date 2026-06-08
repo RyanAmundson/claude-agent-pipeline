@@ -454,9 +454,18 @@ async function runTicket(positional, flags) {
   if (t.source?.agent) console.log(`  agent:       ${t.source.agent}`);
   if (t.source?.file)  console.log(`  file:        ${t.source.file}${t.source.line ? ':' + t.source.line : ''}`);
   if (t.pr_url) console.log(`  pr:          ${t.pr_url}`);
+  if (t.branch) console.log(`  branch:      ${t.branch}${t.base ? '  (base ' + t.base + ')' : ''}`);
+  if (t.worktree) console.log(`  worktree:    ${t.worktree}`);
   if (t.created_at) console.log(`  created:     ${t.created_at}`);
   if (t.updated_at) console.log(`  updated:     ${t.updated_at}`);
   if (t.description) { console.log(`\n${t.description}\n`); }
+  if (Array.isArray(t.comments) && t.comments.length) {
+    console.log(`\n  comments (${t.comments.length}):`);
+    for (const c of t.comments) {
+      const v = c.verdict ? ` [${c.verdict}]` : '';
+      console.log(`    ${(c.author || '?').padEnd(18)}${v}  ${(c.body || '').split('\n')[0]}`);
+    }
+  }
 }
 
 async function runAgent(positional, flags) {
