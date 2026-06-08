@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, lstatSync, unlinkSync, symlinkSync, copyFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSync, spawn } from 'node:child_process';
+import { execSync, execFileSync, spawn } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -35,6 +35,8 @@ Usage:
                                               Print pipeline snapshot (queued + active tickets)
   agent-pipeline ticket <id> [--target <p>] [--json]
                                               Show a single ticket
+  agent-pipeline comment <id> --body "..." [--verdict pass|fail] [--target <p>]
+                                              Append a human comment to a ticket (filesystem backend)
   agent-pipeline agent <name> [--target <p>] [--json]
                                               Show an agent + its current activity
   agent-pipeline events [--target <p>] [--json]
@@ -80,6 +82,7 @@ function parseFlags(args) {
     port: null, open: false, json: false, state: null,
     prompt: null, wait: false, detach: false, stream: false, follow: false, runId: null,
     allowedTools: [], disallowedTools: [], maxBudgetUsd: null, model: null,
+    body: null, verdict: null, author: null,
   };
   const positional = [];
   for (let i = 0; i < args.length; i++) {
@@ -112,6 +115,9 @@ function parseFlags(args) {
       case '--disallowedTools': flags.disallowedTools.push(...args[++i].split(/[\s,]+/).filter(Boolean)); break;
       case '--max-budget-usd': flags.maxBudgetUsd = Number(args[++i]); break;
       case '--model': flags.model = args[++i]; break;
+      case '--body': flags.body = args[++i]; break;
+      case '--verdict': flags.verdict = args[++i]; break;
+      case '--author': flags.author = args[++i]; break;
       default:
         if (a.startsWith('--')) die(`Unknown flag: ${a}\n\n${HELP}`);
         positional.push(a);
@@ -334,6 +340,7 @@ switch (cmd) {
   case 'ui':     runUi(flags); break;
   case 'status': runStatus(positional, flags); break;
   case 'ticket': runTicket(positional, flags); break;
+  case 'comment': runComment(positional, flags); break;
   case 'agent':  runAgent(positional, flags); break;
   case 'events': runEvents(flags); break;
   case 'run':    runRun(positional, flags); break;
@@ -346,6 +353,35 @@ switch (cmd) {
 
 function targetOf(flags) {
   return flags.target ? resolve(flags.target) : process.cwd();
+}
+
+function resolveQueueDir(target) {
+  // Default matches config.schema.json filesystem.queueDir default.
+  let queueDir = '.pipeline/queue';
+  const cfgPath = join(target, '.pipeline', 'config.json');
+  if (existsSync(cfgPath)) {
+    try {
+      const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+      if (cfg.filesystem?.queueDir) queueDir = cfg.filesystem.queueDir;
+    } catch {}  // optional config read — same pattern as detectDeps()
+  }
+  return resolve(target, queueDir);
+}
+
+function runComment(positional, flags) {
+  if (positional.length !== 1) die(`Usage: agent-pipeline comment <id> --body "..." [--verdict pass|fail] [--target <p>]`);
+  if (!flags.body) die(`comment: --body is required`);
+  if (flags.verdict && !['pass', 'fail'].includes(flags.verdict)) die(`comment: --verdict must be pass|fail`);
+  const target = targetOf(flags);
+  const queueDir = resolveQueueDir(target);
+  const script = join(PLUGIN_ROOT, 'queue', 'queue-comment.sh');
+  const args = [script, positional[0], '--author', flags.author || 'human', '--body', flags.body, '--queue-dir', queueDir];
+  if (flags.verdict) args.push('--verdict', flags.verdict);
+  try {
+    execFileSync('bash', args, { stdio: 'inherit' });
+  } catch (err) {
+    process.exit(err.status || 1);
+  }
 }
 
 async function runUi(flags) {

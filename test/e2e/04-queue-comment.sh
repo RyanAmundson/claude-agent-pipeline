@@ -65,17 +65,20 @@ else
   echo "  (skip concurrency: flock unavailable)"
 fi
 
-# TODO(Task 2): restore section #8 once 'agent-pipeline comment' exists
-# # 8) CLI verb: `agent-pipeline comment` resolves queueDir from config and appends author=human
-# cat > "$WORK/.pipeline/config.json" <<'JSON'
-# { "repo": "x/y", "ghUser": "z", "backend": "filesystem",
-#   "filesystem": { "queueDir": ".pipeline/queue" } }
-# JSON
-# node "$REPO_ROOT/bin/cli.js" comment TKT-001 --body "via cli" --target "$WORK" >/dev/null
-# LAST_AUTHOR=$(jq -r '.comments[-1].author' "$F")
-# LAST_BODY=$(jq -r '.comments[-1].body' "$F")
-# assert_eq "$LAST_AUTHOR" "human" "CLI defaults author to human"
-# assert_eq "$LAST_BODY" "via cli" "CLI body recorded"
+# 8) CLI verb: `agent-pipeline comment` resolves a NON-DEFAULT queueDir from config and appends author=human
+CUSTOM="$WORK/custom-queue"
+mkdir -p "$CUSTOM/needs-code-review"
+cat > "$CUSTOM/needs-code-review/TKT-CLI.json" <<'JSON'
+{ "id": "TKT-CLI", "title": "cli", "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z" }
+JSON
+cat > "$WORK/.pipeline/config.json" <<'JSON'
+{ "repo": "x/y", "ghUser": "z", "backend": "filesystem",
+  "filesystem": { "queueDir": "custom-queue" } }
+JSON
+node "$REPO_ROOT/bin/cli.js" comment TKT-CLI --body "via cli" --target "$WORK" >/dev/null
+CF="$CUSTOM/needs-code-review/TKT-CLI.json"
+assert_eq "$(jq -r '.comments[-1].author' "$CF")" "human" "CLI defaults author to human"
+assert_eq "$(jq -r '.comments[-1].body' "$CF")" "via cli" "CLI body recorded (resolved non-default queueDir)"
 
 echo
 echo "${_GRN}✓ 04-queue-comment passed${_RST}"
