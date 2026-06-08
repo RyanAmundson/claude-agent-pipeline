@@ -38,11 +38,22 @@ State transitions are filesystem moves. `mv` within the same filesystem is atomi
     "line": 88
   },
   "pr_url": null,
+  "branch": "fix/TKT-001",
+  "base": "main",
+  "worktree": ".worktrees/TKT-001",
+  "comments": [
+    { "author": "code-reviewer", "verdict": "fail", "body": "layer violation in src/x.ts", "at": "2026-06-07T10:05:00Z" }
+  ],
   "stale_count": 0,
   "created_at": "2026-04-30T10:00:00Z",
   "updated_at": "2026-04-30T10:00:00Z"
 }
 ```
+
+For the GitHub-free review loop, `branch`/`base` replace `pr_url` as the review
+handle (reviewers run `git diff <base>...<branch>`), and `comments[]` holds the
+review/feedback trail. Each comment is `{ author, verdict, body, at }` where
+`verdict` is `"pass" | "fail" | null` (`null` = informational / human).
 
 The `id` field is the canonical identifier — also the file's basename (`<id>.json`).
 
@@ -73,6 +84,16 @@ Read-modify-write a ticket field, serialized via `flock`. Use for setting `pr_ur
 
 ```bash
 queue-update.sh in-progress TKT-001 '.pr_url = "https://github.com/o/r/pull/42"'
+```
+
+### `queue-comment.sh <id> --author <name> --body "<text>" [--verdict pass|fail]`
+
+Append a comment to a ticket's `comments[]` (flock-serialized, atomic). Locates
+the ticket across state dirs (or pass `--state`). Reviewers use this with
+`--verdict`; humans use the `agent-pipeline comment` CLI verb (author `human`).
+
+```bash
+queue-comment.sh TKT-001 --author tester --verdict pass --body "regression test present"
 ```
 
 ### `queue-stale.sh [--max-age-hours N]`
