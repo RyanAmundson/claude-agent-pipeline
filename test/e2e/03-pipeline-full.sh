@@ -23,8 +23,11 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib/setup.sh"
 . "$HERE/lib/assertions.sh"
 
-# Bump default per-run budget since each stage can be a few hundred K tokens
-AP_BUDGET="${AP_BUDGET:-0.50}"
+# Each stage (especially the worker, which actually writes code) can run a few
+# hundred K tokens. setup.sh already set AP_BUDGET, so a `${AP_BUDGET:-…}` default
+# here is a dead no-op — set the per-stage ceiling explicitly. Override the whole
+# pipeline with AP_BUDGET_FULL=… . Ceiling, not target; agents stop when done.
+AP_BUDGET="${AP_BUDGET_FULL:-2.00}"
 
 echo
 echo "═══ 03-pipeline-full (live) ══════════════════════════════════════"

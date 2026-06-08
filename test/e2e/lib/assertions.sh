@@ -14,7 +14,13 @@ fi
 
 _fail() {
   echo "${_RED}FAIL:${_RST} $1" >&2
-  echo "${_DIM}  at ${BASH_SOURCE[2]}:${BASH_LINENO[1]}${_RST}" >&2
+  # Under `set -u`, BASH_SOURCE[2]/BASH_LINENO[1] are unbound when _fail is
+  # called directly from a test body (call depth 1) rather than via an assert_*
+  # helper (depth 2). Walk down the call stack with defaults instead of erroring
+  # — otherwise the "unbound variable" crash masks the real failure location.
+  local _src="${BASH_SOURCE[2]:-${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}}"
+  local _ln="${BASH_LINENO[1]:-${BASH_LINENO[0]:-0}}"
+  echo "${_DIM}  at ${_src}:${_ln}${_RST}" >&2
   exit 1
 }
 

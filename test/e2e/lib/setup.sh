@@ -2,7 +2,7 @@
 #
 # Inputs (env):
 #   FIXTURE   — fixture name under test/fixtures/  (default: full-pipeline)
-#   AP_BUDGET — per-run budget cap in USD          (default: 0.30)
+#   AP_BUDGET — per-run budget cap in USD          (default: 1.00)
 #
 # Outputs (env exported back to the caller):
 #   AP_TARGET — path to the tmp copy of the fixture
@@ -15,7 +15,11 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 FIXTURE="${FIXTURE:-full-pipeline}"
 FIXTURE_DIR="$REPO_ROOT/test/fixtures/$FIXTURE"
 AP_BIN="${AP_BIN:-node $REPO_ROOT/bin/cli.js}"
-AP_BUDGET="${AP_BUDGET:-0.30}"
+# Per-run ceiling. The scanner alone runs ~$0.25–0.32 with the installed agent
+# context, so the old $0.30 default capped agents mid-task (error_max_budget_usd)
+# and the live suite could never pass. This is a ceiling, not a target — agents
+# stop when done, so real spend is lower.
+AP_BUDGET="${AP_BUDGET:-1.00}"
 
 [ -d "$FIXTURE_DIR" ] || { echo "FAIL: fixture not found: $FIXTURE_DIR" >&2; exit 1; }
 
