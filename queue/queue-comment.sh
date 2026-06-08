@@ -12,8 +12,8 @@
 # Locates <id>.json across the queue state subdirectories (or honors --state),
 # then appends { author, verdict, body, at } to .comments and bumps updated_at.
 # Serialized via flock(1) when available (matching queue-update.sh); falls back
-# to a plain atomic tmp->rename when flock is absent (loses cross-process
-# serialization only — single-writer use is still safe).
+# to a portable mkdir(2)-based lock when flock is absent (e.g. macOS), which
+# preserves cross-process serialization so concurrent appends do not clobber.
 
 set -euo pipefail
 
@@ -79,7 +79,7 @@ _apply() {
        --arg at "$NOW" \
        --argjson verdict "$VERDICT_JSON" \
        '.comments = ((.comments // []) + [{author: $author, verdict: $verdict, body: $body, at: $at}]) | .updated_at = $at' \
-       "$file" > "$tmp"
+       "$file" > "$tmp" || { rm -f "$tmp"; return 1; }
     mv "$tmp" "$file"
 }
 
@@ -90,7 +90,23 @@ touch "$LOCK"
 if command -v flock >/dev/null 2>&1; then
     ( flock -x 200; _apply "$FILE" ) 200>"$LOCK"
 else
-    _apply "$FILE"
+    # flock(1) absent (e.g. macOS): serialize with a portable mkdir lock.
+    # mkdir is atomic on POSIX — it fails if the dir already exists, so exactly
+    # one process holds the lock at a time. Queue write volume is tiny.
+    LOCKDIR="$LOCK.d"
+    _waited=0
+    until mkdir "$LOCKDIR" 2>/dev/null; do
+        sleep 0.05
+        _waited=$((_waited + 1))
+        if [[ "$_waited" -ge 200 ]]; then
+            echo "timeout acquiring lock: $LOCKDIR" >&2
+            exit 1
+        fi
+    done
+    _rc=0
+    _apply "$FILE" || _rc=$?
+    rmdir "$LOCKDIR" 2>/dev/null || true
+    [[ "$_rc" -eq 0 ]] || exit "$_rc"
 fi
 
 echo "commented: $ID ($AUTHOR)"

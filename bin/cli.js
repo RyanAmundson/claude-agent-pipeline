@@ -363,7 +363,11 @@ function resolveQueueDir(target) {
     try {
       const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
       if (cfg.filesystem?.queueDir) queueDir = cfg.filesystem.queueDir;
-    } catch {}  // optional config read — same pattern as detectDeps()
+    } catch (err) {
+      // Config exists but is unreadable/malformed — warn instead of silently
+      // routing to the default queueDir (which could be the wrong store).
+      console.warn(`warning: could not parse ${cfgPath} (${err.message}); using default queueDir '${queueDir}'`);
+    }
   }
   return resolve(target, queueDir);
 }

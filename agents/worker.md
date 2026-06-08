@@ -62,7 +62,7 @@ The `pipeline:needs-test-review` label on the PR signals the tester agent to rev
 When `.pipeline/config.json` has `backend: "filesystem"`, do NOT use `gh`, do NOT open a PR, and do NOT push. The ticket is the unit of review.
 
 1. **Claim**: `queue/queue-claim.sh <id> needs-work in-progress --queue-dir <queueDir>` (skip the ticket if claim fails — another worker won).
-2. **Worktree + branch** exactly as in step 5a (worktree under `worktreeRoot`, branch `<branchPrefix><id>`), but branch from the local base (`config base` or the repo default branch) and **never push**.
+2. **Worktree + branch** exactly as in the GitHub path's worktree-creation step (worktree under `worktreeRoot`, branch `<branchPrefix><id>`), but branch from the local base (`config base` or the repo default branch) and **never push**.
 3. **Implement** the fix and write regression tests. Run the `verify` commands from config (e.g. `npm run type-check && npm run lint`). Do not run the full test suite (orphaned-process risk).
 4. **Record review handles** on the ticket:
    `queue/queue-update.sh in-progress <id> '.branch="<branch>" | .base="<base>" | .worktree="<path>"' --queue-dir <queueDir>`
@@ -70,4 +70,4 @@ When `.pipeline/config.json` has `backend: "filesystem"`, do NOT use `gh`, do NO
    `queue/queue-comment.sh <id> --author worker --body "<what changed; regression test path; verify results>" --queue-dir <queueDir>`
 6. **Hand off**: `queue/queue-claim.sh <id> in-progress needs-test-review --queue-dir <queueDir>`.
 
-The ticket's `comments[]` plus `branch`/`base` ARE the audit trail — there is no PR. The forbidden-commands rule on the main worktree (step 5c) still applies.
+The ticket's `comments[]` plus `branch`/`base` ARE the audit trail — there is no PR. The forbidden-commands-on-the-main-worktree rule still applies.

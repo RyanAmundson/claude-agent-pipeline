@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 04-queue-comment.sh — unit test for queue/queue-comment.sh + the `comment`
-# CLI verb. No claude, $0, ~2s. Portable: the concurrency sub-test is skipped
-# where flock(1) is unavailable.
+# CLI verb. No claude, $0, ~2s. The concurrency sub-test runs on every platform:
+# queue-comment.sh serializes with flock when present and a portable mkdir lock
+# otherwise, so concurrent appends must not clobber regardless of flock.
 
 set -uo pipefail
 
@@ -55,15 +56,24 @@ assert_eq "$RC" "2" "missing --body exits 2"
 set +e; bash "$QC" TKT-001 --author x --body y --verdict maybe --queue-dir "$QDIR" >/dev/null 2>&1; RC=$?; set -e
 assert_eq "$RC" "2" "invalid --verdict exits 2"
 
-# 7) concurrency: 5 parallel appends all land (requires flock)
-if command -v flock >/dev/null 2>&1; then
-  before="$(jq '.comments | length' "$F")"
-  for i in 1 2 3 4 5; do bash "$QC" TKT-001 --author "w$i" --body "c$i" --queue-dir "$QDIR" >/dev/null & done
-  wait
-  assert_eq "$(jq '.comments | length' "$F")" "$((before + 5))" "all 5 concurrent appends landed"
-else
-  echo "  (skip concurrency: flock unavailable)"
-fi
+# 7) concurrency: 8 parallel appends all land (flock OR portable mkdir lock)
+before="$(jq '.comments | length' "$F")"
+for i in 1 2 3 4 5 6 7 8; do bash "$QC" TKT-001 --author "w$i" --body "c$i" --queue-dir "$QDIR" >/dev/null & done
+wait
+assert_eq "$(jq '.comments | length' "$F")" "$((before + 8))" "all 8 concurrent appends landed"
+NEW_AUTHORS="$(jq -r '[.comments[].author | select(startswith("w"))] | unique | length' "$F")"
+assert_eq "$NEW_AUTHORS" "8" "no concurrent append clobbered another (8 distinct authors)"
+if ! command -v flock >/dev/null 2>&1; then _ok "concurrency held via portable mkdir lock (no flock)"; fi
+
+# 7b) fail-safe: a malformed ticket makes jq fail; the write must NOT reach mv
+#     (no truncation) and must exit non-zero. Guards the regression where
+#     `_apply || rc=$?` suppressed set -e and overwrote the file with empty tmp.
+BADC="$QDIR/needs-code-review/BAD.json"
+printf 'not { valid json' > "$BADC"
+BADC_ORIG="$(cat "$BADC")"
+set +e; bash "$QC" BAD --author x --body y --queue-dir "$QDIR" >/dev/null 2>&1; RC=$?; set -e
+assert_eq "$RC" "1" "malformed ticket (jq fails) exits non-zero"
+assert_eq "$(cat "$BADC")" "$BADC_ORIG" "malformed ticket left intact — not truncated by failed write"
 
 # 8) CLI verb: `agent-pipeline comment` resolves a NON-DEFAULT queueDir from config and appends author=human
 CUSTOM="$WORK/custom-queue"

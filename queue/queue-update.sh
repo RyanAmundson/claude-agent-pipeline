@@ -8,12 +8,12 @@
 #   queue-update.sh in-progress CER-123 '.pr_url = "https://github.com/owner/repo/pull/42"'
 #
 # Wraps the read-modify-write in flock(1) so concurrent updates serialize when
-# flock is available; falls back to a plain atomic tmp->rename when it is absent
-# (e.g. macOS), losing only cross-process serialization — single-writer use is
-# still safe. Mirrors queue-comment.sh.
+# flock is available; falls back to a portable mkdir(2)-based lock when it is
+# absent (e.g. macOS), which preserves cross-process serialization so concurrent
+# updates do not clobber. Mirrors queue-comment.sh.
 # Within a single state, claiming + updating + transitioning compose safely:
 # - claim is `mv` (atomic)
-# - update is flock + jq when available, else jq + atomic rename (serialized)
+# - update is flock + jq when available, else mkdir-lock + jq + atomic rename
 # - transition is `mv` (atomic)
 
 set -euo pipefail
@@ -56,14 +56,30 @@ touch "$LOCK"
 _apply() {
     local file="$1"
     local tmp="$file.tmp.$$"
-    jq "$EXPR" "$file" > "$tmp"
+    jq "$EXPR" "$file" > "$tmp" || { rm -f "$tmp"; return 1; }
     mv "$tmp" "$file"
 }
 
 if command -v flock >/dev/null 2>&1; then
     ( flock -x 200; _apply "$FILE" ) 200>"$LOCK"
 else
-    _apply "$FILE"
+    # flock(1) absent (e.g. macOS): serialize with a portable mkdir lock.
+    # mkdir is atomic on POSIX — it fails if the dir already exists, so exactly
+    # one process holds the lock at a time. Queue write volume is tiny.
+    LOCKDIR="$LOCK.d"
+    _waited=0
+    until mkdir "$LOCKDIR" 2>/dev/null; do
+        sleep 0.05
+        _waited=$((_waited + 1))
+        if [[ "$_waited" -ge 200 ]]; then
+            echo "timeout acquiring lock: $LOCKDIR" >&2
+            exit 1
+        fi
+    done
+    _rc=0
+    _apply "$FILE" || _rc=$?
+    rmdir "$LOCKDIR" 2>/dev/null || true
+    [[ "$_rc" -eq 0 ]] || exit "$_rc"
 fi
 
 echo "updated: $ID"
