@@ -107,10 +107,16 @@ export function readCycleTail(target, n = 1) {
 }
 
 // All parseable entries + raw line count (watcher uses lineCount as its cursor).
+// Torn-read safety: an in-flight append lacks its trailing newline, so an
+// unterminated final line is ignored — counting it would advance the watcher's
+// cursor past a line that completes a moment later, and it would never be
+// emitted. (The watcher is this function's only consumer.)
 export function readCycleLines(target) {
   let content;
   try { content = readFileSync(cyclesPath(target), 'utf8'); } catch { return { lineCount: 0, entries: [] }; }
-  const lines = content.split('\n').filter(l => l.trim());
+  const raw = content.split('\n');
+  if (raw.length && raw[raw.length - 1] !== '') raw.pop(); // unterminated tail = in-flight append
+  const lines = raw.filter(l => l.trim());
   return { lineCount: lines.length, entries: lines.map(l => { try { return JSON.parse(l); } catch { return null; } }) };
 }
 

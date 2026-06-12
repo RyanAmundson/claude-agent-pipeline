@@ -569,7 +569,7 @@ function renderEvent(ev, flags, { runsOnly = false } = {}) {
     case 'cycle.report': {
       const c = ev.cycle;
       const ready = c.counts?.['ready-for-human'] || 0;
-      console.log(`CYCLE  #${c.cycle}  dispatched=${(c.dispatched || []).length} ready-for-human=${ready}`);
+      console.log(`CYCLE  #${c.cycle}  dispatched=${(c.dispatched || []).length}  ready-for-human=${ready}`);
       break;
     }
   }

@@ -232,8 +232,11 @@ export function createWatcher(opts) {
 
   let lastTickets = indexTickets(target);
   let lastRuns = indexRuns(target);
-  let lastCyclesSize = cyclesFileSize(target);
+  // Count BEFORE size: an append landing between the two reads then bumps the
+  // size check on the next reconcile and gets emitted, instead of being
+  // silently swallowed by a size snapshot that already includes it.
   let lastCyclesCount = readCycleLines(target).lineCount;
+  let lastCyclesSize = cyclesFileSize(target);
   let closed = false;
   const watchers = [];
   let debounceTimer = null;
