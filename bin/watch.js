@@ -89,6 +89,11 @@ export function formatEventLine(ev, ts) {
   }
 }
 
+// Raw-mode stdin: 'q' or Ctrl-C (ETX, 0x03 — raw mode suppresses SIGINT).
+export function isQuitKey(k) {
+  return k === 'q' || k === '\u0003';
+}
+
 export async function runWatch({ target, pluginRoot }) {
   const { createWatcher, readSnapshot, STATES } = await import('../api/index.js');
   const { readCycleTail, computeDeltas, getBackend } = await import('../api/cycles.js');
@@ -163,8 +168,7 @@ export async function runWatch({ target, pluginRoot }) {
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.on('data', b => {
-      const k = b.toString();
-      if (k === 'q' || k === '') quit(); // q or Ctrl-C in raw mode
+      if (isQuitKey(b.toString())) quit();
     });
   }
 

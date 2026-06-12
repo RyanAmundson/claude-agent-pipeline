@@ -87,5 +87,12 @@ console.log(f.includes('linear') && f.includes('needs-work') ? 'OK' : 'MISSING')
 ")
 assert_eq "$DEG" "OK" "non-FS mode renders backend + cycle-sourced counts"
 
+# ── 3) quit keys: q and Ctrl-C (ETX) — raw mode suppresses SIGINT ──────────
+QUIT=$(node --input-type=module -e "
+import { isQuitKey } from '$REPO_ROOT/bin/watch.js';
+console.log([isQuitKey('q'), isQuitKey(String.fromCharCode(3)), isQuitKey('x'), isQuitKey('')].join(','));
+")
+assert_eq "$QUIT" "true,true,false,false" "q and ETX quit; x and empty string do not"
+
 echo
 echo "09-watch-tui: all assertions passed"
