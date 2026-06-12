@@ -11,6 +11,7 @@ import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { diffRunIndexes, ensureRunsDirs, getRun, getRunEvents, indexRuns, listRuns, reapOrphanedRuns, runsRoot, RUN_STATES } from './runs.js';
+import { readCycleLines, cyclesFileSize } from './cycles.js';
 
 export { listRuns, getRun, getRunEvents, reapOrphanedRuns, RUN_STATES };
 
@@ -231,6 +232,11 @@ export function createWatcher(opts) {
 
   let lastTickets = indexTickets(target);
   let lastRuns = indexRuns(target);
+  // Count BEFORE size: an append landing between the two reads then bumps the
+  // size check on the next reconcile and gets emitted, instead of being
+  // silently swallowed by a size snapshot that already includes it.
+  let lastCyclesCount = readCycleLines(target).lineCount;
+  let lastCyclesSize = cyclesFileSize(target);
   let closed = false;
   const watchers = [];
   let debounceTimer = null;
@@ -259,6 +265,22 @@ export function createWatcher(opts) {
     const nowRuns = indexRuns(target);
     for (const ev of diffRunIndexes(lastRuns, nowRuns)) emit(ev);
     lastRuns = nowRuns;
+
+    // Cycle reports: tail .pipeline/runs/cycles.jsonl. Size-guarded so the
+    // common no-change reconcile never reads the file. Shrink = truncation/
+    // rotation — reset the cursor without emitting (the log is append-only;
+    // anything else is manual intervention).
+    const size = cyclesFileSize(target);
+    if (size !== lastCyclesSize) {
+      const { lineCount, entries } = readCycleLines(target);
+      if (lineCount > lastCyclesCount) {
+        for (const c of entries.slice(lastCyclesCount)) {
+          if (c) emit({ type: 'cycle.report', cycle: c });
+        }
+      }
+      lastCyclesSize = size;
+      lastCyclesCount = lineCount;
+    }
   }
 
   function onFsChange() {
@@ -299,6 +321,15 @@ export function createWatcher(opts) {
     } catch (err) {
       emitter.emit('error', err);
     }
+  }
+
+  // cycles.jsonl lives directly in the runs root; watch the dir non-recursively.
+  try {
+    const w = fsWatch(runsRoot(target), { persistent: true }, onFsChange);
+    w.on('error', err => emitter.emit('error', err));
+    watchers.push(w);
+  } catch (err) {
+    emitter.emit('error', err);
   }
 
   reconcileTimer = setInterval(() => {

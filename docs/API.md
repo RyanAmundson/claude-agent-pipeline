@@ -96,7 +96,28 @@ Blocks until SIGINT. Emits `run.start | run.update | run.complete | run.fail | r
 agent-pipeline events --target ~/Code/my-app [--json]
 ```
 
-Like `runs events`, but also includes ticket-state-machine events (`ticket.upsert | ticket.move | ticket.remove`).
+Like `runs events`, but also includes ticket-state-machine events (`ticket.upsert | ticket.move | ticket.remove`) and orchestrator cycle summaries (`cycle.report`, one per `agent-pipeline cycle report` append).
+
+### `cycle report` — record an orchestrator cycle
+
+```bash
+agent-pipeline cycle report --data '<json>' [--target ~/Code/my-app]
+agent-pipeline cycle report --data -          # payload JSON on stdin
+```
+
+Appends one line to `<target>/.pipeline/runs/cycles.jsonl` and prints the canonical formatted status block (the orchestrator pastes this verbatim each cycle). The CLI stamps `cycle` (previous + 1) and `at`, and computes per-state deltas against the previous line. Payload fields (all optional unless noted): `counts` (object of `<queue-state>: <int>` — **required** on non-filesystem backends, auto-snapshotted from the queue on filesystem), `dispatched` (array of `{agent, item?}`), `running` (array of `{agent, item?, minutes?}`), `awaiting` (string ids), `notes` (strings), `nextCheckSeconds` (positive int). Fail-open: a corrupt-tailed file emits a stderr warning and restarts numbering; a missing file (first run) starts at cycle 1 silently.
+
+No `--json` flag: the JSONL file (`cycles.jsonl`) is the machine-readable form; this verb's stdout is the human-readable render the orchestrator pastes verbatim.
+
+Each appended line becomes a `cycle.report` watcher event. Distinct from the queue audit log (`queue/events.jsonl`): that is filesystem-backend ticket-mutation audit; `cycles.jsonl` is backend-neutral orchestrator telemetry.
+
+### `watch` — live terminal dashboard
+
+```bash
+agent-pipeline watch [--target ~/Code/my-app]
+```
+
+Full-screen zero-dependency TUI: stage counts with deltas, active runs with elapsed time, tickets awaiting human review, and a scrolling event tail. Re-renders on every watcher event plus a 1s tick (countdown to the orchestrator's next check). `q` or Ctrl-C exits. Requires an interactive terminal — for pipeable output use `agent-pipeline events --json`. In non-filesystem backends the queue panels degrade to the latest cycle report's data (the watcher cannot see Linear/GitHub label state).
 
 ---
 
@@ -240,6 +261,7 @@ If you need to inspect raw state:
     logs/<runId>.stdout             # raw claude -p stdout (stream-json)
     logs/<runId>.stderr             # raw claude -p stderr
     logs/<runId>.events.jsonl       # parsed/normalized events
+    cycles.jsonl                    # orchestrator cycle reports (one JSON line per cycle)
 ```
 
 State transitions are atomic `rename(2)` calls — first agent wins; second gets `ENOENT`. No locks needed.

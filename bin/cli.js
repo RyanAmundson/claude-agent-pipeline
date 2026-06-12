@@ -53,6 +53,9 @@ Usage:
                                               Subscribe to run-only events (JSONL on stdout)
   agent-pipeline runs kill <runId> [--target <p>]
                                               Send SIGTERM to a running agent run
+  agent-pipeline cycle report --data '<json>' [--target <p>]
+                                              Record an orchestrator cycle + print the formatted status block
+  agent-pipeline watch [--target <p>]         Live terminal dashboard (TUI) of queue, runs, and cycles
   agent-pipeline version                      Print version
 
 Install options:
@@ -82,7 +85,7 @@ function parseFlags(args) {
     port: null, open: false, json: false, state: null,
     prompt: null, wait: false, detach: false, stream: false, follow: false, runId: null,
     allowedTools: [], disallowedTools: [], maxBudgetUsd: null, model: null,
-    body: null, verdict: null, author: null,
+    body: null, verdict: null, author: null, data: null,
   };
   const positional = [];
   for (let i = 0; i < args.length; i++) {
@@ -118,6 +121,7 @@ function parseFlags(args) {
       case '--body': flags.body = args[++i]; break;
       case '--verdict': flags.verdict = args[++i]; break;
       case '--author': flags.author = args[++i]; break;
+      case '--data': flags.data = args[++i]; break;
       default:
         if (a.startsWith('--')) die(`Unknown flag: ${a}\n\n${HELP}`);
         positional.push(a);
@@ -345,6 +349,8 @@ switch (cmd) {
   case 'events': runEvents(flags); break;
   case 'run':    runRun(positional, flags); break;
   case 'runs':   runRuns(positional, flags); break;
+  case 'cycle':  runCycle(positional, flags); break;
+  case 'watch':  runWatchCmd(flags); break;
   case '_supervise': runSupervise(positional, flags); break;  // internal: detached supervisor
   default: die(`Unknown command: ${cmd}\n\n${HELP}`);
 }
@@ -503,6 +509,56 @@ async function runEvents(flags) {
   for await (const ev of w) renderEvent(ev, flags);
 }
 
+async function runCycle(positional, flags) {
+  const usage = `Usage: agent-pipeline cycle report --data '<json>' [--target <p>]   (--data - reads the payload from stdin)`;
+  if (positional.length !== 1 || positional[0] !== 'report') die(usage);
+  if (!flags.data) {
+    die(`cycle report: --data is required — the cycle payload JSON (or '-' to read it from stdin).\n${usage}\nExample: agent-pipeline cycle report --data '{"dispatched":[{"agent":"worker","item":"fs-103"}],"nextCheckSeconds":600}'`);
+  }
+  const target = targetOf(flags);
+  const { STATES, readSnapshot } = await import('../api/index.js');
+  const { getBackend, validatePayload, readCycleTail, buildCycleEntry, appendCycle, renderBlock } =
+    await import('../api/cycles.js');
+
+  const raw = flags.data === '-' ? readFileSync(0, 'utf8') : flags.data;
+  let payload;
+  try { payload = JSON.parse(raw); }
+  catch (err) {
+    die(`cycle report: --data is not valid JSON (${err.message}).\nExample: --data '{"dispatched":[],"nextCheckSeconds":600}'`);
+  }
+
+  const backend = getBackend(target);
+  const errs = validatePayload(payload, { backend, states: STATES });
+  if (errs.length) die(`cycle report: invalid payload:\n  - ${errs.join('\n  - ')}`);
+
+  // Filesystem mode: counts are optional — snapshot the queue ourselves.
+  if (!payload.counts && backend === 'filesystem') {
+    const snap = readSnapshot({ target, pluginRoot: PLUGIN_ROOT });
+    payload.counts = {};
+    for (const st of STATES) {
+      const n = (snap.tickets.byState[st] || []).length;
+      if (n) payload.counts[st] = n;
+    }
+  }
+
+  const { entries, corruptTail } = readCycleTail(target, 1);
+  if (corruptTail) {
+    console.warn(`warning: last line of .pipeline/runs/cycles.jsonl is not valid JSON — treating this as the first cycle (numbering and deltas reset). Inspect the file if cycle history matters.`);
+  }
+  const prev = corruptTail ? null : (entries[entries.length - 1] ?? null);
+  const entry = buildCycleEntry(payload, prev, { backend });
+  appendCycle(target, entry);
+  console.log(renderBlock(entry, prev, STATES));
+}
+
+async function runWatchCmd(flags) {
+  if (!process.stdout.isTTY) {
+    die(`watch: stdout is not a TTY — the live dashboard needs an interactive terminal.\nFor pipeable output use: agent-pipeline events --json`);
+  }
+  const { runWatch } = await import('./watch.js');
+  await runWatch({ target: targetOf(flags), pluginRoot: PLUGIN_ROOT });
+}
+
 function renderEvent(ev, flags, { runsOnly = false } = {}) {
   if (runsOnly && !ev.type.startsWith('run.') && ev.type !== 'snapshot') return;
   if (flags.json) { process.stdout.write(JSON.stringify(ev) + '\n'); return; }
@@ -519,6 +575,12 @@ function renderEvent(ev, flags, { runsOnly = false } = {}) {
     case 'run.fail':      console.log(`RUN✗   ${ev.runId}  exit=${ev.run?.exitCode}`); break;
     case 'run.kill':      console.log(`RUNK   ${ev.runId}`); break;
     case 'run.remove':    console.log(`RUN-   ${ev.runId}  [${ev.state}]`); break;
+    case 'cycle.report': {
+      const c = ev.cycle;
+      const ready = c.counts?.['ready-for-human'] || 0;
+      console.log(`CYCLE  #${c.cycle}  dispatched=${(c.dispatched || []).length}  ready-for-human=${ready}`);
+      break;
+    }
   }
 }
 
