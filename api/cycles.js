@@ -155,7 +155,7 @@ export function appendCycle(target, entry) {
   return path;
 }
 
-function fmtDelta(d) { return d > 0 ? `(+${d})` : d < 0 ? `(${d})` : '(=)'; }
+export function fmtDelta(d) { return d > 0 ? `(+${d})` : d < 0 ? `(${d})` : '(=)'; }
 
 function fmtAwaiting(awaiting) {
   const ids = awaiting.slice(0, 6).join(', ');

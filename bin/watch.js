@@ -7,10 +7,15 @@
 // STAGES/AWAITING degrade to the latest cycle report's data.
 
 import { basename } from 'node:path';
+import { fmtDelta } from '../api/cycles.js';
 
 const LABEL_W = 16;
 
+// Guard frame integrity against newlines/ANSI in agent-generated ticket titles.
+// KNOWN LIMITATION: code-point counting means CJK/emoji (2-column glyphs) can
+// push the right border out; zero-dep wcwidth is out of scope for v0.4.
 function clip(text, w) {
+  text = String(text).replace(/[\x00-\x1f\x7f]/g, ' ');
   const chars = [...text];
   return chars.length > w ? chars.slice(0, Math.max(0, w - 1)).join('') + '…' : text;
 }
@@ -24,13 +29,11 @@ function elapsed(startedAt, now) {
 }
 
 function countdown(cycle, now) {
-  if (!cycle?.nextCheckSeconds || !cycle.at) return 'no cycle yet';
+  if (cycle?.nextCheckSeconds == null || !cycle.at) return 'no cycle yet';
   const due = new Date(cycle.at).getTime() + cycle.nextCheckSeconds * 1000;
   const remain = Math.floor((due - now.getTime()) / 1000);
   return remain > 0 ? `next check ${remain}s` : 'check due';
 }
-
-function fmtDelta(d) { return d > 0 ? `(+${d})` : d < 0 ? `(${d})` : '(=)'; }
 
 // Pure: state → frame string. state = { targetName, backend, states, counts,
 // deltas, cycle, runs, awaiting, events, now, columns, rows }.
@@ -91,7 +94,7 @@ export function formatEventLine(ev, ts) {
 
 // Raw-mode stdin: 'q' or Ctrl-C (ETX, 0x03 — raw mode suppresses SIGINT).
 export function isQuitKey(k) {
-  return k === 'q' || k === '\u0003';
+  return k === 'q' || k === '';
 }
 
 export async function runWatch({ target, pluginRoot }) {
@@ -136,16 +139,39 @@ export async function runWatch({ target, pluginRoot }) {
       ...state, now: new Date(),
       columns: process.stdout.columns, rows: process.stdout.rows,
     });
-    process.stdout.write('\x1b[H\x1b[2J' + frame + '\n');
+    // Home cursor, overwrite frame, erase below — no blank-then-paint flash.
+    process.stdout.write('\x1b[H' + frame + '\n\x1b[0J');
   };
 
   process.stdout.write('\x1b[?1049h\x1b[?25l'); // alt screen, hide cursor
+
+  // Restore the terminal no matter how we die — exit hooks run even after
+  // an uncaught exception; a corrupted terminal is the worst TUI failure mode.
+  process.on('exit', () => process.stdout.write('\x1b[?25h\x1b[?1049l'));
+
   const w = createWatcher({ target, pluginRoot });
-  const timer = setInterval(render, 1000);
+
+  // Coalesce synchronous event bursts: N events from one reconcile → ONE render.
+  let pending = false;
+  let refreshDue = false;
+  const scheduleRender = (needsRefresh) => {
+    if (needsRefresh) refreshDue = true;
+    if (pending) return;
+    pending = true;
+    setImmediate(() => {
+      pending = false;
+      if (refreshDue) { refreshDue = false; refresh(); }
+      render();
+    });
+  };
+
+  const timer = setInterval(() => scheduleRender(false), 1000);
+
+  // cleanup clears the timer and closes the watcher; terminal restore is owned
+  // by the exit hook registered above.
   const cleanup = () => {
     clearInterval(timer);
     try { w.close(); } catch {}
-    process.stdout.write('\x1b[?25h\x1b[?1049l'); // cursor back, leave alt screen
   };
   const quit = () => { cleanup(); process.exit(0); };
 
@@ -156,12 +182,11 @@ export async function runWatch({ target, pluginRoot }) {
       state.events.push(line);
       if (state.events.length > 8) state.events.shift();
     }
-    refresh();
-    render();
+    scheduleRender(true);
   });
   w.on('error', () => {}); // transient fs errors — the reconcile tick recovers
 
-  process.stdout.on('resize', render);
+  process.stdout.on('resize', () => scheduleRender(false));
   process.on('SIGINT', quit);
   process.on('SIGTERM', quit);
   if (process.stdin.isTTY) {

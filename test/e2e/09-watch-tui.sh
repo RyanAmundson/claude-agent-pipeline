@@ -64,7 +64,7 @@ const f = buildFrame({ targetName: 'x', backend: 'filesystem', states: ['needs-w
 const ws = new Set(f.split('\n').map(l => [...l].length));
 console.log(ws.size === 1 && [...ws][0] <= 72 ? 'UNIFORM' : 'RAGGED ' + [...ws].join(','));
 ")
-assert_eq "$WIDTHS" "UNIFORM" "all frame lines same width, within columns"
+assert_eq "$WIDTHS" "UNIFORM" "all frame lines same code-point width (wide-char rendering not pinned)"
 
 # expired countdown → 'check due'
 DUE=$(node --input-type=module -e "
