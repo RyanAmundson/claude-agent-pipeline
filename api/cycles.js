@@ -24,7 +24,10 @@ export function getBackend(target) {
   const cfgPath = join(resolve(target), '.pipeline', 'config.json');
   if (!existsSync(cfgPath)) return 'filesystem';
   try { return JSON.parse(readFileSync(cfgPath, 'utf8')).backend || 'filesystem'; }
-  catch { return 'filesystem'; }
+  catch (err) {
+    console.warn(`warning: could not parse ${cfgPath} (${err.message}); assuming backend 'filesystem'`);
+    return 'filesystem';
+  }
 }
 
 // Agent role → the queue state its dispatch annotation attaches to in the block.
@@ -64,6 +67,13 @@ export function validatePayload(payload, { backend, states }) {
     arr.forEach((d, i) => {
       if (!isObj(d) || typeof d.agent !== 'string') {
         errs.push(`${field}[${i}]: must be an object with a string 'agent' (and optional 'item'${field === 'running' ? ", 'minutes'" : ''})`);
+        return;
+      }
+      if (d.item != null && typeof d.item !== 'string') {
+        errs.push(`${field}[${i}].item: must be a string, got ${JSON.stringify(d.item)}`);
+      }
+      if (field === 'running' && d.minutes != null && typeof d.minutes !== 'number') {
+        errs.push(`${field}[${i}].minutes: must be a number, got ${JSON.stringify(d.minutes)}`);
       }
     });
   }
@@ -120,7 +130,7 @@ export function buildCycleEntry(payload, prev, { backend, now = new Date() } = {
   for (const [k, v] of Object.entries(payload.counts || {})) if (v !== 0) counts[k] = v;
   return {
     v: 1,
-    cycle: (prev?.cycle ?? 0) + 1,
+    cycle: (Number.isInteger(prev?.cycle) ? prev.cycle : 0) + 1,
     at: now.toISOString().replace(/\.\d+Z$/, 'Z'),
     backend,
     counts,
@@ -140,6 +150,12 @@ export function appendCycle(target, entry) {
 }
 
 function fmtDelta(d) { return d > 0 ? `(+${d})` : d < 0 ? `(${d})` : '(=)'; }
+
+function fmtAwaiting(awaiting) {
+  const ids = awaiting.slice(0, 6).join(', ');
+  const more = awaiting.length > 6 ? ` +${awaiting.length - 6} more` : '';
+  return `⚠ awaiting you: ${ids}${more}`;
+}
 
 // The canonical block. `prev` null → first cycle → no delta column.
 export function renderBlock(entry, prev, states) {
@@ -164,6 +180,7 @@ export function renderBlock(entry, prev, states) {
 
   const shown = states.filter(s => (entry.counts[s] || 0) !== 0 || (deltas?.[s] || 0) !== 0);
   const nameW = shown.reduce((m, s) => Math.max(m, s.length), 0);
+  let awaitingRendered = false;
   for (const s of shown) {
     const count = entry.counts[s] || 0;
     let line = `  ${s.padEnd(nameW)} ${String(count).padEnd(3)}`;
@@ -171,12 +188,11 @@ export function renderBlock(entry, prev, states) {
     const ann = [];
     if (byState[s]) ann.push(`→ ${byState[s].join(', ')}`);
     if (s === 'ready-for-human' && entry.awaiting.length) {
-      const ids = entry.awaiting.slice(0, 6).join(', ');
-      const more = entry.awaiting.length > 6 ? ` +${entry.awaiting.length - 6} more` : '';
-      ann.push(`⚠ awaiting you: ${ids}${more}`);
+      ann.push(fmtAwaiting(entry.awaiting));
+      awaitingRendered = true;
     }
     if (ann.length) line += `  ${ann.join('  ')}`;
-    lines.push(line);
+    lines.push(line.trimEnd());
   }
 
   lines.push('');
@@ -188,6 +204,7 @@ export function renderBlock(entry, prev, states) {
     parts.push(`${entry.running.length} running (${r})`);
   }
   lines.push(`  agents: ${parts.join(', ')}`);
+  if (entry.awaiting.length && !awaitingRendered) lines.push(`  ${fmtAwaiting(entry.awaiting)}`);
   if (footerDispatch.length) lines.push(`  also: ${footerDispatch.join(', ')}`);
   if (entry.nextCheckSeconds != null) lines.push(`  next check in ${entry.nextCheckSeconds}s`);
   for (const n of entry.notes) lines.push(`  ✓ ${n}`);
