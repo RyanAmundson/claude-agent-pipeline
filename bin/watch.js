@@ -94,7 +94,7 @@ export function formatEventLine(ev, ts) {
 
 // Raw-mode stdin: 'q' or Ctrl-C (ETX, 0x03 — raw mode suppresses SIGINT).
 export function isQuitKey(k) {
-  return k === 'q' || k === '';
+  return k === 'q' || k === '\u0003';
 }
 
 export async function runWatch({ target, pluginRoot }) {
