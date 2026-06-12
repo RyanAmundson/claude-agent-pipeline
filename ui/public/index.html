@@ -3,21 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>agent-pipeline — live log</title>
+<title>agent-pipeline — dashboard</title>
 <link rel="stylesheet" href="/style.css">
 </head>
-<body>
+<body data-view="log">
 <header>
   <h1>agent-pipeline <span class="dim">live</span></h1>
+  <nav class="tabs" role="tablist">
+    <button class="tab" data-tab="log" role="tab" aria-selected="true">live log</button>
+    <button class="tab" data-tab="agents" role="tab" aria-selected="false">agents</button>
+  </nav>
   <div class="controls">
-    <label><input type="checkbox" id="autoscroll" checked> auto-scroll</label>
-    <label><input type="checkbox" id="show-system"> system events</label>
-    <button id="clear">clear</button>
+    <label class="log-only"><input type="checkbox" id="autoscroll" checked> auto-scroll</label>
+    <label class="log-only"><input type="checkbox" id="show-system"> system events</label>
+    <button class="log-only" id="clear">clear</button>
     <span id="status" class="status">connecting…</span>
   </div>
 </header>
 <main>
-  <pre id="log" aria-live="polite"></pre>
+  <pre id="log" aria-live="polite" data-panel="log"></pre>
+  <section id="agents" data-panel="agents" aria-live="polite">
+    <div class="agents-intro">
+      <p>Every agent in the pipeline, what it does, the bounds it works within,
+         and its live status. Grouped by stage, in pipeline order.</p>
+      <span id="agents-status" class="dim">loading…</span>
+    </div>
+    <div id="agents-list"></div>
+  </section>
 </main>
 <script src="/app.js" type="module"></script>
 </body>
