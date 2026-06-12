@@ -1,4 +1,4 @@
-# Design: Orchestrator Cycle Reports
+# Design: Orchestrator Cycle Reports + Live Watch TUI
 
 **Date:** 2026-06-12
 **Status:** approved (interactive brainstorm with owner; surface/format/scope/mechanism all confirmed)
@@ -10,6 +10,7 @@ The orchestrator's per-cycle reporting is irregular and unformatted in practice.
 1. It is GitHub/Linear-label-shaped; the filesystem-backend section (orchestrator.md bottom) never restates a report format, so FS-mode cycles report freeform or not at all.
 2. The model freehand-formats the block every cycle — format drifts between cycles and sessions.
 3. Nothing machine-readable is emitted: `agent-pipeline events` and the dashboard never see cycle summaries, dispatch decisions, or self-healing notes. The event stream is a derived watcher over queue/runs dirs (`api/index.js createWatcher`) with no append-an-event path.
+4. There is no constantly-refreshing human view in the terminal — `events` is a raw scroll, and the web dashboard (`ui`) is a separate in-flight effort.
 
 ## Decisions (confirmed with owner)
 
@@ -19,6 +20,7 @@ The orchestrator's per-cycle reporting is irregular and unformatted in practice.
 | Format | Compact dashboard block (counts + deltas + dispatches + awaiting-human + footer) |
 | Backends | Both — one format, backend-specific snapshot sources |
 | Mechanism | New CLI verb renders the block deterministically; the orchestrator pastes its stdout. No model-side formatting. |
+| Live view | `agent-pipeline watch` — a constantly-refreshing TUI **on top of** the cycle-report layer (not replacing it) |
 
 ## Architecture
 
@@ -27,8 +29,10 @@ orchestrator (prompt)            CLI                              surfaces
 ──────────────────────────────────────────────────────────────────────────
 snapshot counts ───────▶ agent-pipeline cycle report --data '<json>'
 dispatch decisions             ├─ cycle# + deltas (vs last line)
-                               ├─ append .pipeline/runs/cycles.jsonl ──▶ watcher ──▶ events / UI
+                               ├─ append .pipeline/runs/cycles.jsonl ──▶ watcher ──▶ events / TUI / UI
                                └─ print formatted block ─────────────────▶ session text
+
+human (other terminal) ─▶ agent-pipeline watch ──▶ live TUI (createWatcher + cycles.jsonl)
 ```
 
 The JSONL file is both the history and the delta source: the CLI computes the cycle number and per-state deltas by reading the previous last line. No other state.
@@ -106,6 +110,39 @@ Rules:
 - `bin/cli.js renderEvent` gains a case: `CYCLE  #14  dispatched=3 ready-for-human=4` (one line, non-JSON mode); `--json` passes the full object through.
 - **Out of scope:** dashboard UI rendering. `ui/` has uncommitted in-flight changes (see TODOS.md "Dashboard offline/local parity"); SSE subscribers receive `cycle.report` for free when that work lands.
 
+## Live TUI: `agent-pipeline watch`
+
+A constantly-refreshing terminal dashboard for humans, in a terminal of their own — the orchestrator session is untouched by it.
+
+```
+┌ claude-agent-pipeline · filesystem · cycle 14 · next check 184s ─┐
+│                                                                  │
+│  STAGES          needs-work        3 (+1)                        │
+│                  needs-test-review 1 (=)                         │
+│                  ready-for-human   4 (+2) ⚠                      │
+│                                                                  │
+│  RUNS ▶          worker  fs-103   6m12s                          │
+│                  tester  fs-102   1m03s                          │
+│                                                                  │
+│  AWAITING YOU    fs-101 fix: queue race in claim                 │
+│                  fs-104 feat: ticket new verb                    │
+│                                                                  │
+│  EVENTS          10:42:01 MOVE  fs-101 → ready-for-human         │
+│                  10:41:48 RUN✓  worker fs-099 $0.42              │
+│                  10:40:12 CYCLE #14 dispatched=3                 │
+└─ q quit · refreshes live ────────────────────────────────────────┘
+```
+
+Mechanics:
+
+- **Zero dependencies** (the API layer's stated principle): raw ANSI — alternate screen buffer, hidden cursor, full-frame clear+redraw. New module `bin/watch.js`, lazily imported by `bin/cli.js` like the watcher is.
+- **Data**: one `createWatcher` subscription (initial snapshot + ticket/run/`cycle.report` events) plus an initial read of the last `cycles.jsonl` line for cycle context before the first event arrives.
+- **Refresh**: re-render on every watcher event, plus a 1-second tick for elapsed-time and next-check countdown (derived from cycle `at` + `nextCheckSeconds`, clamped to `due` at 0). Re-render on terminal resize; lines truncated to terminal width.
+- **Panels**: header (target basename, backend, cycle #, countdown) · STAGES (same render rules as the cycle block: non-zero count or delta, deltas from the latest cycle report) · RUNS (active runs with elapsed time) · AWAITING YOU (`ready-for-human` tickets with titles) · EVENTS (scrolling tail of the last ~8 events, one-line renders with timestamps).
+- **Input**: `q` / Ctrl-C exits, restoring screen and cursor. Nothing else in v1.
+- **Non-TTY guard**: stdout not a TTY → error per the error-message contract, pointing at `agent-pipeline events --json` as the pipeable alternative.
+- **Backend caveat (stated in help + docs)**: live ticket/queue panels are filesystem-mode; in Linear/GitHub mode the watcher sees no queue dirs, so STAGES/AWAITING render from the latest cycle report only and EVENTS carries runs + cycles. The frame builder is a pure function `state → string` so this degraded mode (and everything else) is unit-testable without a TTY.
+
 ## Prompt changes: `agents/orchestrator.md`
 
 - §4 "Report" rewritten: every cycle — including idle ones — after dispatch decisions, build the payload (counts per backend source, dispatched/running/awaiting/notes/nextCheckSeconds), run `agent-pipeline cycle report --data '<json>'`, and paste its stdout **verbatim** as the cycle update in the session. The old hand-drawn table is deleted. Self-audit (§3.5) and self-healing output feed `notes` instead of their own freeform blocks (their detailed instructions stay; only the reporting surface changes).
@@ -114,7 +151,7 @@ Rules:
 
 ## Docs
 
-Per the A7 doc-parity contract: `docs/API.md`, the `HELP` string in `bin/cli.js`, and the README CLI table all gain `cycle report`. `docs/API.md` documents the `cycle.report` event type and the `cycles.jsonl` schema.
+Per the A7 doc-parity contract: `docs/API.md`, the `HELP` string in `bin/cli.js`, and the README CLI table all gain `cycle report` **and** `watch`. `docs/API.md` documents the `cycle.report` event type and the `cycles.jsonl` schema; `watch` docs state the non-FS degraded mode.
 
 ## Tests (smoke tier — no model spend)
 
@@ -126,9 +163,11 @@ Per the A7 doc-parity contract: `docs/API.md`, the `HELP` string in `bin/cli.js`
 6. Corrupt tail: garbage last line → warns, still appends a valid cycle-1-style line.
 7. Watcher: append a line → `cycle.report` event observed (and not re-emitted on reconcile).
 8. Rendering: zero/zero states omitted; awaiting list truncates at 6; idle cycle still renders.
+9. TUI frame builder (pure function, no TTY): panels render from a seeded state; lines truncate to a given width; countdown math (fresh cycle → `Ns`, expired → `due`); degraded non-FS mode renders STAGES from cycle-report counts.
+10. TUI non-TTY guard: piped stdout → non-zero exit, message names `agent-pipeline events --json`.
 
 ## Out of scope
 
-- Dashboard/UI rendering of cycle reports (TODOS.md item; event is emitted for it).
+- **Web** dashboard rendering of cycle reports (TODOS.md item; the `cycle.report` event is emitted for it — the TUI here is terminal-only and shares no code with `ui/`).
 - Emitting cycle markers into the queue audit log (`queue/events.jsonl`) — revisit if molecules Phase 2 wants orchestrator decisions in the replayable audit.
 - Retention/rotation of `cycles.jsonl` (append-only; revisit if size becomes real).
