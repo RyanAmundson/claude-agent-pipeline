@@ -120,16 +120,24 @@ Before dispatching, spend ~60 seconds auditing how well the pipeline has been wo
 Do NOT hand-format a status table. After making this cycle's dispatch decisions, record the cycle and emit the canonical block:
 
 1. Build the payload:
-   - `counts` — GitHub/Linear mode: the label snapshot from step 1, keyed by queue-state names (`pipeline:needs-work` → `needs-work`), with PR refs (`#123`) as items. Filesystem mode: OMIT `counts` entirely — the CLI snapshots the queue itself.
-   - `dispatched` — one `{"agent","item"}` per agent dispatched this cycle.
+   - `counts` — GitHub/Linear mode: the label snapshot from step 1 as integer counts, keyed by queue-state names (`pipeline:needs-work` → `needs-work`). Filesystem mode: OMIT `counts` entirely — the CLI snapshots the queue itself.
+   - `dispatched` — one `{"agent","item"}` per agent dispatched this cycle (in GitHub mode, `item` is a PR ref like `#123`).
    - `running` — agents still running from earlier cycles: `{"agent","item","minutes"}`.
-   - `awaiting` — ticket ids / PR refs currently in ready-for-human.
+   - `awaiting` — ticket ids (or PR refs in GitHub mode) currently in ready-for-human.
    - `notes` — one string per self-audit action (prefix `self-audit:`) and self-healing action (prefix `self-healing:`). Omit the field when nothing happened — don't pad.
    - `nextCheckSeconds` — the ScheduleWakeup delay you are about to use.
 2. Run:
 
    ```
    agent-pipeline cycle report --data '<payload JSON>'
+   ```
+
+   If the payload contains single quotes (e.g. an apostrophe in a note), pass it on stdin with a quoted heredoc instead:
+
+   ```
+   agent-pipeline cycle report --data - <<'PAYLOAD'
+   <payload JSON>
+   PAYLOAD
    ```
 
 3. Paste the command's stdout VERBATIM as your cycle update. That block IS the report — do not wrap it in another table or restate it.

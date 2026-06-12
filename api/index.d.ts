@@ -159,7 +159,24 @@ export type WatcherEvent =
   | { type: 'run.complete'; runId: string; from: RunLifecycleState; to: RunLifecycleState; run: Run }
   | { type: 'run.fail';     runId: string; from: RunLifecycleState; to: RunLifecycleState; run: Run }
   | { type: 'run.kill';     runId: string; from: RunLifecycleState; to: RunLifecycleState; run: Run }
-  | { type: 'run.remove';   runId: string; state: RunLifecycleState };
+  | { type: 'run.remove';   runId: string; state: RunLifecycleState }
+  | { type: 'cycle.report'; cycle: CycleEntry };
+
+/** One orchestrator cycle, as appended to `.pipeline/runs/cycles.jsonl`. */
+export interface CycleEntry {
+  v: 1;
+  cycle: number;
+  /** ISO-8601 UTC, second precision. */
+  at: string;
+  backend: string;
+  /** Non-zero queue-state counts only. */
+  counts: Record<string, number>;
+  dispatched: { agent: string; item?: string }[];
+  running: { agent: string; item?: string; minutes?: number }[];
+  awaiting: string[];
+  notes: string[];
+  nextCheckSeconds?: number;
+}
 
 // ─── options ───────────────────────────────────────────────────────────────
 
