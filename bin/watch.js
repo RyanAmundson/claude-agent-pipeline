@@ -119,7 +119,7 @@ export function buildFrame(s) {
       // shown real items + marker.
       const visible = items.slice(0, shown);
       const hidden  = total - shown;
-      body = [...visible, `${''.padEnd(LABEL_W)}… +${hidden} more`];
+      body = [...visible, `… +${hidden} more`];
     }
     return renderSection(label, body);
   };
