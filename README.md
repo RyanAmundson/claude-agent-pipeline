@@ -144,6 +144,8 @@ Full reference: [`docs/API.md`](./docs/API.md). Types: [`api/index.d.ts`](./api/
 
 A self-contained demo script that exercises the full dispatch / query / follow / kill loop lives at [`scripts/demo-run-loop.sh`](./scripts/demo-run-loop.sh).
 
+The browser dashboard (`agent-pipeline ui`) has two tabs: **live log** — streaming run events, color-coded per agent — and **agents** — a reference list of every agent grouped by pipeline stage, showing what each one does (its role) and the bounds it works within (its scope), plus input/output and required deps.
+
 ## First-run setup
 
 After install, in Claude Code from the target project:
