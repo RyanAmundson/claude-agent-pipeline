@@ -350,6 +350,7 @@ switch (cmd) {
   case 'run':    runRun(positional, flags); break;
   case 'runs':   runRuns(positional, flags); break;
   case 'cycle':  runCycle(positional, flags); break;
+  case 'watch':  runWatchCmd(flags); break;
   case '_supervise': runSupervise(positional, flags); break;  // internal: detached supervisor
   default: die(`Unknown command: ${cmd}\n\n${HELP}`);
 }
@@ -548,6 +549,14 @@ async function runCycle(positional, flags) {
   const entry = buildCycleEntry(payload, prev, { backend });
   appendCycle(target, entry);
   console.log(renderBlock(entry, prev, STATES));
+}
+
+async function runWatchCmd(flags) {
+  if (!process.stdout.isTTY) {
+    die(`watch: stdout is not a TTY — the live dashboard needs an interactive terminal.\nFor pipeable output use: agent-pipeline events --json`);
+  }
+  const { runWatch } = await import('./watch.js');
+  await runWatch({ target: targetOf(flags), pluginRoot: PLUGIN_ROOT });
 }
 
 function renderEvent(ev, flags, { runsOnly = false } = {}) {
