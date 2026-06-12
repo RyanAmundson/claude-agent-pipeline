@@ -22,6 +22,7 @@ STATE="${1:-}"
 ID="${2:-}"
 EXPR="${3:-}"
 QUEUE_DIR=".pipeline/queue"
+BY=""
 
 shift 3 2>/dev/null || true
 
@@ -29,6 +30,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --queue-dir)
             QUEUE_DIR="$2"
+            shift 2
+            ;;
+        --by)
+            BY="$2"
             shift 2
             ;;
         *)
@@ -81,5 +86,11 @@ else
     rmdir "$LOCKDIR" 2>/dev/null || true
     [[ "$_rc" -eq 0 ]] || exit "$_rc"
 fi
+
+# Best-effort audit: record the applied jq expression (replayable). A failed
+# append must never fail the (already-committed) update.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "$SCRIPT_DIR/queue-event.sh" "$ID" field --queue-dir "$QUEUE_DIR" \
+    ${BY:+--by "$BY"} "expr=$EXPR" "state=$STATE" 2>/dev/null || true
 
 echo "updated: $ID"

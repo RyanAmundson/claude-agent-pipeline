@@ -28,6 +28,8 @@ done
 IN_PROGRESS="$QUEUE_DIR/in-progress"
 [[ ! -d "$IN_PROGRESS" ]] && exit 0
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 NOW=$(date +%s)
 THRESHOLD=$((MAX_AGE_HOURS * 3600))
 
@@ -63,5 +65,10 @@ find "$IN_PROGRESS" -maxdepth 1 -name '*.json' -print0 \
             jq ".stale_count = $new_stale" "$file" > "$file.tmp"
             mv "$file.tmp" "$QUEUE_DIR/$target_state/$(basename "$file")"
             rm -f "$file"
+
+            # Best-effort audit of the stale re-queue.
+            bash "$SCRIPT_DIR/queue-event.sh" "$id" transition --queue-dir "$QUEUE_DIR" \
+                --by stale-sweep "from=in-progress" "to=$target_state" \
+                "reason=stale(${new_stale}x)" 2>/dev/null || true
         fi
     done

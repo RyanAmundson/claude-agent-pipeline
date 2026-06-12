@@ -109,4 +109,10 @@ else
     [[ "$_rc" -eq 0 ]] || exit "$_rc"
 fi
 
+# Best-effort audit: mirror the comment into the event log. A failed append must
+# never fail the (already-committed) comment.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "$SCRIPT_DIR/queue-event.sh" "$ID" comment --queue-dir "$QUEUE_DIR" \
+    "author=$AUTHOR" "verdict=$VERDICT" "body=$BODY" 2>/dev/null || true
+
 echo "commented: $ID ($AUTHOR)"

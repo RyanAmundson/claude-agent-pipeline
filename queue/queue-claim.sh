@@ -21,6 +21,7 @@ ID="${1:-}"
 FROM="${2:-}"
 TO="${3:-}"
 QUEUE_DIR=".pipeline/queue"
+BY=""
 
 shift 3 2>/dev/null || true
 
@@ -28,6 +29,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --queue-dir)
             QUEUE_DIR="$2"
+            shift 2
+            ;;
+        --by)
+            BY="$2"
             shift 2
             ;;
         *)
@@ -49,5 +54,10 @@ mkdir -p "$DST_DIR"
 
 # Atomic mv. If SRC doesn't exist, mv exits non-zero — we exit 1.
 mv "$SRC" "$DST" 2>/dev/null || { echo "claim failed: $ID not in $FROM" >&2; exit 1; }
+
+# Best-effort audit: a failed append must never fail the (already-done) claim.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "$SCRIPT_DIR/queue-event.sh" "$ID" transition --queue-dir "$QUEUE_DIR" \
+    ${BY:+--by "$BY"} "from=$FROM" "to=$TO" 2>/dev/null || true
 
 echo "claimed: $ID → $TO"
