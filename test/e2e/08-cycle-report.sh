@@ -122,5 +122,12 @@ assert_eq "$(grep -c '"type":"cycle.report"' "$WORK/events.out")" "1" "emitted e
 EMITTED=$(grep '"type":"cycle.report"' "$WORK/events.out" | head -1 | jq -r '.cycle.cycle')
 assert_eq "$EMITTED" "$(tail -1 "$CY" | jq -r '.cycle')" "emitted entry matches the appended cycles.jsonl line"
 
+# ── 9) --data - reads payload from stdin (special-char robustness) ────────────
+STDIN_OUT=$(printf '{"notes":["self-healing: PR #570'"'"'s branch deleted"],"nextCheckSeconds":60}' \
+  | $AP cycle report --target "$WORK" --data -)
+assert_contains "$STDIN_OUT" "self-healing: PR #570's branch deleted" "stdin payload: note with single-quote renders"
+STDIN_NOTE=$(tail -1 "$CY" | jq -r '.notes[0]')
+assert_eq "$STDIN_NOTE" "self-healing: PR #570's branch deleted" "stdin payload: note persisted correctly in cycles.jsonl"
+
 echo
 echo "08-cycle-report: all assertions passed"

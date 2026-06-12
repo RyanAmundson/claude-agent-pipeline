@@ -94,5 +94,37 @@ console.log([isQuitKey('q'), isQuitKey(String.fromCharCode(3)), isQuitKey('x'), 
 ")
 assert_eq "$QUIT" "true,true,false,false" "q and ETX quit; x and empty string do not"
 
+# ── 4) frame height is capped to rows-1 when content overflows ───────────────
+HEIGHT=$(node --input-type=module -e "
+import { buildFrame } from '$REPO_ROOT/bin/watch.js';
+const now = new Date('2026-06-12T10:42:10Z');
+const runs    = Array.from({length: 12}, (_, i) => ({ agent: 'worker-' + i, startedAt: '2026-06-12T10:35:58Z' }));
+const events  = Array.from({length: 8},  (_, i) => ('10:4' + i + ':01 MOVE  ticket-' + i + ' a → b'));
+const awaiting= Array.from({length: 6},  (_, i) => ({ id: 'aw-' + i, title: 'fix thing ' + i }));
+const frame = buildFrame({
+  targetName: 'cap-test', backend: 'filesystem',
+  states: ['needs-work','ready-for-human'],
+  counts: { 'needs-work': 3, 'ready-for-human': 4 }, deltas: null,
+  cycle: { cycle: 5, at: '2026-06-12T10:42:00Z', nextCheckSeconds: 270 },
+  runs, awaiting, events, now, columns: 80, rows: 16,
+});
+const lines = frame.split('\n');
+const lineCount = lines.length;
+const titleOk   = lines[0].includes('cap-test');
+const ws        = new Set(lines.map(l => [...l].length));
+const uniformOk = ws.size === 1 && [...ws][0] <= 80;
+const hasMore   = frame.includes('… +');
+console.log([lineCount, titleOk, uniformOk, hasMore].join(','));
+")
+HEIGHT_LINES=$(echo "$HEIGHT" | cut -d, -f1)
+HEIGHT_TITLE=$(echo "$HEIGHT" | cut -d, -f2)
+HEIGHT_UNIF=$(echo  "$HEIGHT" | cut -d, -f3)
+HEIGHT_MORE=$(echo  "$HEIGHT" | cut -d, -f4)
+if [ "$HEIGHT_LINES" -le 15 ]; then _ok "height-capped frame fits in rows-1 (got $HEIGHT_LINES lines)";
+else _fail "height-capped frame exceeds rows-1: got $HEIGHT_LINES lines (max 15)"; fi
+assert_eq "$HEIGHT_TITLE" "true"  "height-capped frame: first line still contains the target name"
+assert_eq "$HEIGHT_UNIF"  "true"  "height-capped frame: uniform line width maintained"
+assert_eq "$HEIGHT_MORE"  "true"  "height-capped frame: +N more marker present"
+
 echo
 echo "09-watch-tui: all assertions passed"

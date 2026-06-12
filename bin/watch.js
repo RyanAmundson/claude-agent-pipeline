@@ -40,17 +40,12 @@ function countdown(cycle, now) {
 export function buildFrame(s) {
   const w = Math.min(Math.max(s.columns || 80, 60), 110);
   const inner = w - 4; // '│ ' + content + ' │'
-  const lines = [];
   const row = t => '│ ' + clip(t, inner).padEnd(inner) + ' │';
   const blank = row('');
-  const section = (label, body) => {
-    lines.push(blank);
-    const items = body.length ? body : ['—'];
-    items.forEach((b, i) => lines.push(row(`${(i === 0 ? label : '').padEnd(LABEL_W)}${b}`)));
-  };
 
   const title = ` ${s.targetName} · ${s.backend}${s.cycle ? ` · cycle ${s.cycle.cycle}` : ''} · ${countdown(s.cycle, s.now)} `;
-  lines.push('┌' + clip(`─${title}`, w - 2).padEnd(w - 2, '─') + '┐');
+  const titleLine = '┌' + clip(`─${title}`, w - 2).padEnd(w - 2, '─') + '┐';
+  const footerLine = '└' + clip('─ q quit · refreshes live ', w - 2).padEnd(w - 2, '─') + '┘';
 
   const counts = s.counts || {};
   const stages = (s.states || [])
@@ -60,18 +55,88 @@ export function buildFrame(s) {
       const warn = st === 'ready-for-human' && (counts[st] || 0) > 0 ? ' ⚠' : '';
       return `${st.padEnd(18)} ${String(counts[st] || 0).padEnd(3)}${d}${warn}`;
     });
-  section('STAGES', stages);
 
-  section('RUNS ▶', (s.runs || []).map(r =>
-    `${(r.agent || '?').padEnd(20)} ${elapsed(r.startedAt, s.now)}`));
+  // Render a section: blank separator + label on first body line, subsequent lines unlabelled.
+  const renderSection = (label, items) => {
+    const body = items.length ? items : ['—'];
+    return [blank, ...body.map((b, i) => row(`${(i === 0 ? label : '').padEnd(LABEL_W)}${b}`))];
+  };
 
-  section('AWAITING YOU', (s.awaiting || []).slice(0, 5).map(t =>
-    `${String(t.id).padEnd(12)} ${t.title || ''}`));
+  // Fixed content that is never shrunk: title + STAGES section + trailing blank + footer.
+  const stagesLines = renderSection('STAGES', stages);
+  const fixed = 1 + stagesLines.length + 1 + 1; // titleLine + stages + blank + footerLine
 
-  section('EVENTS', (s.events || []).slice(-8));
+  // Cap: leave 1 line below the frame for the cursor-erase write after it.
+  const maxLines = Math.max(10, (s.rows || 30) - 1);
+  const budgetForSections = maxLines - fixed; // lines available for RUNS + AWAITING + EVENTS
 
-  lines.push(blank);
-  lines.push('└' + clip('─ q quit · refreshes live ', w - 2).padEnd(w - 2, '─') + '┘');
+  // Compute body items for each shrinkable section.
+  const runItems   = (s.runs || []).map(r =>
+    `${(r.agent || '?').padEnd(20)} ${elapsed(r.startedAt, s.now)}`);
+  const awaitItems = (s.awaiting || []).slice(0, 5).map(t =>
+    `${String(t.id).padEnd(12)} ${t.title || ''}`);
+  const evtItems   = (s.events || []).slice(-8);
+
+  // Distribute budget across sections: shrink EVENTS → RUNS → AWAITING until fits.
+  // Section line cost: 1 (blank) + max(1, bodyLines) where bodyLines = shown if shown==total
+  // else shown+1 (shown real items + 1 "… +N more" marker line). Min body is always 1.
+  let evtShown   = evtItems.length;
+  let runShown   = runItems.length;
+  let awaitShown = awaitItems.length;
+
+  // Lines a section occupies given its shown count and total item count.
+  const secLines = (shown, total) => {
+    if (total === 0) return 2; // blank + "—"
+    if (shown >= total) return 1 + total; // blank + all items
+    // shown < total: blank + shown real lines + 1 marker = shown + 2
+    return 1 + shown + 1;
+  };
+
+  const sectionCost = () =>
+    secLines(evtShown, evtItems.length)
+  + secLines(runShown, runItems.length)
+  + secLines(awaitShown, awaitItems.length);
+
+  // Shrink EVENTS by dropping oldest lines (no marker in EVENTS — just fewer events shown).
+  // EVENTS only shows the newest N, so reducing evtShown means fewer old events.
+  while (sectionCost() > budgetForSections && evtShown > 1) evtShown--;
+
+  // Shrink RUNS: min 1 shown (= 1 real item + marker), reducing shown by 1 each step.
+  while (sectionCost() > budgetForSections && runShown > 1) runShown--;
+
+  // Shrink AWAITING: min 1 shown.
+  while (sectionCost() > budgetForSections && awaitShown > 1) awaitShown--;
+
+  // Render each section with its capped item count, adding a "+N more" marker when items hidden.
+  const renderCapped = (label, items, shown) => {
+    const total = items.length;
+    let body;
+    if (total === 0) {
+      body = []; // will render "—"
+    } else if (shown >= total) {
+      body = items;
+    } else {
+      // shown real items + marker.
+      const visible = items.slice(0, shown);
+      const hidden  = total - shown;
+      body = [...visible, `${''.padEnd(LABEL_W)}… +${hidden} more`];
+    }
+    return renderSection(label, body);
+  };
+
+  const secEvents   = renderCapped('EVENTS',       evtItems,   evtShown);
+  const secRuns     = renderCapped('RUNS ▶',        runItems,   runShown);
+  const secAwaiting = renderCapped('AWAITING YOU',  awaitItems, awaitShown);
+
+  const lines = [
+    titleLine,
+    ...stagesLines,
+    ...secRuns,
+    ...secAwaiting,
+    ...secEvents,
+    blank,
+    footerLine,
+  ];
   return lines.join('\n');
 }
 
