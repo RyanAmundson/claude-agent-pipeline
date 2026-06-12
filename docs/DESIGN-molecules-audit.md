@@ -1,6 +1,6 @@
 # Design: Durable Molecules + Versioned Audit (Option C)
 
-**Status:** Phases 0–1 implemented; Phases 2–3 designed, not yet built.
+**Status:** Phases 0–2 implemented; Phase 3 designed, not yet built.
 **Scope:** filesystem backend only (`config.backend = "filesystem"`).
 **Provenance:** investigation into adopting Gas City SDK concepts (see below) into the
 existing pipeline.
@@ -122,9 +122,9 @@ honest (it's exactly what was applied) and replayable.
   orchestrator to act on in Phase 2; `queue-molecule.sh` itself advances linearly.
 - `test/e2e/08-queue-molecule.sh` — 34 assertions.
 
-### Still deferred to Phase 2
-- Instantiating a molecule at intake (scanner / ticket-creator) and the orchestrator
-  reading cursors / evaluating `when`/`loop` to drive dispatch.
+### Done in Phase 2 (see below)
+- Instantiating a molecule at intake and the orchestrator reading cursors /
+  evaluating `when`/`loop` to drive dispatch.
 
 
 **Workflow templates** — declarative, data not prose, in a new `.pipeline/workflows.json`:
@@ -161,18 +161,50 @@ honest (it's exactly what was applied) and replayable.
 
 - New `queue/queue-molecule.sh` — create (instantiate template), advance (move cursor on
   step completion), status. Step transitions emit `molecule` events into the Phase 0 log.
-- `scanner` / `ticket-creator` instantiate a molecule at intake — **moved to Phase 2**
-  (the helper exists now; wiring agents to call it comes with the orchestrator change).
+- Molecule instantiation at intake — **done in Phase 2**, but in the *orchestrator's*
+  filesystem loop rather than in `scanner` / `ticket-creator`. One creation point covers
+  both intake paths (scanner output and human drops) and avoids touching the Linear-only
+  intake agents.
 - Crash-safety: the plan is on disk; a crashed step is detected as stale (reuse
   `queue-stale.sh` logic) and retried from the cursor.
 
-## Phase 2 — Orchestrator drives molecules (designed)
+## Phase 2 — Orchestrator drives molecules (IMPLEMENTED)
 
-- Refactor `agents/orchestrator.md` dispatch to read molecule cursors instead of (or
-  alongside) the hardcoded dispatch table.
-- The "PR merged touching X → dispatch Y" detector rules become workflow triggers/hooks.
-- Keep the hardcoded table as a fallback during the transition, then trim the parts
-  molecules now cover.
+**Borrowed from:** Gas City's reconciling controller reading Molecule state to decide
+what runs next.
+
+### Surfaces added (as built)
+- `queue/queue-molecule.sh list [--json]` — the orchestrator's **dispatch source**.
+  Returns every *incomplete* molecule with its `next` step (`{agent, status}` plus any
+  `when` / `loop`). Human output is `@tsv` (`ticket, template, cursor/total, agent,
+  status`); `--json` returns an array. `list` is the only subcommand that takes no `<id>`.
+- `queue/queue-molecule.sh advance --status skipped` — advances past a step whose
+  `when` guard the orchestrator evaluated as false (recorded as `skipped`, distinct
+  from `done`; rendered `⊘` by `status`/`history`).
+- `queue/workflows.example.json` — ready-to-copy starter templates (bugfix / feature /
+  docs / refactor) with a top-level `default` and a `conditions` doc block describing
+  `hasCodeChanges` / `touchesUI` / `until-approved`.
+- `agents/orchestrator.md` — new **“Molecule-driven dispatch (filesystem backend)”**
+  subsection: ensure-a-molecule-per-ticket at intake (covering scanner output *and*
+  human drops, so the Linear-coupled intake agents need no porting), `list`-driven
+  dispatch, `when`-guard skip, `loop: until-approved` handling for `feedback-responder`,
+  and `done`/`failed`/`skipped` advances. The fixed stage→agent mapping stays as the
+  fallback (locked decision #4).
+- `test/e2e/09-queue-molecule-dispatch.sh` — 17 assertions covering `list`
+  (human + `--json`, `next.when`/`next.loop` exposure, completed molecules dropping out)
+  and the `skipped` advance (cursor moves, event logged, invalid status still rejected).
+
+### Routing authority (as built)
+The molecule cursor decides *what runs next*; `list` surfaces it. The queue state dirs
+remain the atomic-claim primitive (anti-double-dispatch is unchanged), and every
+create/advance/skip/complete is mirrored into `events.jsonl`. Molecule **creation**
+lives in the orchestrator's filesystem loop — one place that covers both intake paths —
+rather than in `scanner` / `ticket-creator` (the latter is Linear-only).
+
+### Not in Phase 2
+- The "PR merged touching X → dispatch Y" detector rules as declarative workflow
+  triggers/hooks: still prose in the orchestrator, not yet data. Future work.
+- Trimming the fixed dispatch table: kept intact as the fallback for this phase.
 
 ## Phase 3 — Optional (designed)
 

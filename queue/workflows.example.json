@@ -1,0 +1,44 @@
+{
+  "$comment": "Starter workflow templates for the filesystem backend. Copy to .pipeline/workflows.json (or let `/pipeline init` scaffold it). Each workflow is an ordered list of agent steps; a per-ticket molecule (.pipeline/molecules/<id>.json) is instantiated from one of these at intake and advanced by the orchestrator. `default` is used when intake doesn't pick a template. Per-step `when`/`loop` are evaluated by the orchestrator (Phase 2): `when` is a guard the orchestrator skips the step when false; `loop` keeps the cursor on the step until a condition clears.",
+  "default": "bugfix",
+  "conditions": {
+    "hasCodeChanges": "the ticket produced a diff (worker/specialist touched source files)",
+    "touchesUI": "the diff includes UI files (e.g. *.tsx, components/, pages/)",
+    "until-approved": "loop: re-dispatch while unresolved human comments exist; ends when the human approves (moves the ticket to ready-for-human/done)"
+  },
+  "workflows": {
+    "bugfix": {
+      "steps": [
+        { "agent": "worker" },
+        { "agent": "tester", "when": "hasCodeChanges" },
+        { "agent": "code-reviewer" },
+        { "agent": "feedback-responder", "loop": "until-approved" }
+      ]
+    },
+    "feature": {
+      "steps": [
+        { "agent": "worker" },
+        { "agent": "tester", "when": "hasCodeChanges" },
+        { "agent": "e2e-test-quality", "when": "touchesUI" },
+        { "agent": "code-reviewer" },
+        { "agent": "feedback-responder", "loop": "until-approved" }
+      ]
+    },
+    "docs": {
+      "steps": [
+        { "agent": "technical-docs-manager" },
+        { "agent": "code-reviewer" },
+        { "agent": "feedback-responder", "loop": "until-approved" }
+      ]
+    },
+    "refactor": {
+      "steps": [
+        { "agent": "declarative-refactor-specialist" },
+        { "agent": "folder-structure-enforcer" },
+        { "agent": "tester", "when": "hasCodeChanges" },
+        { "agent": "code-reviewer" },
+        { "agent": "feedback-responder", "loop": "until-approved" }
+      ]
+    }
+  }
+}

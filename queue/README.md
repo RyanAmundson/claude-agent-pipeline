@@ -130,7 +130,7 @@ queue-history.sh TKT-001
 # 2026-06-10T10:48Z  comment      [fail] code-reviewer: layer violation
 ```
 
-### `queue-molecule.sh <create|next|advance|status> <id> [...]`
+### `queue-molecule.sh <create|next|advance|status|list> [<id>] [...]`
 
 Durable workflow (**molecule**) instances. A molecule is a per-ticket plan —
 an ordered list of agent steps plus a cursor, instantiated from a named template
@@ -141,9 +141,17 @@ is on disk, so a crashed step resumes from the cursor.
 queue-molecule.sh create  TKT-001 bugfix        # instantiate from a template
 queue-molecule.sh next    TKT-001                # → the current step's agent
 queue-molecule.sh advance TKT-001 --by worker --run <runId>   # step done, cursor++
+queue-molecule.sh advance TKT-001 --status skipped            # when-guard false: skip step, cursor++
 queue-molecule.sh advance TKT-001 --status failed             # hold cursor for retry
 queue-molecule.sh status  TKT-001 [--json]
+queue-molecule.sh list    [--json]               # every incomplete molecule + its next step
 ```
+
+`list` is the orchestrator's **dispatch source**: it returns each incomplete
+molecule with `next.{agent,status}` plus any `next.when` / `next.loop`, so the
+orchestrator can dispatch `next.agent`, skip a step whose `when` guard is false
+(`advance --status skipped`), and recognize the `until-approved` feedback loop.
+`list` is the one subcommand that takes no `<id>`.
 
 Step transitions are mirrored into `events.jsonl` as `molecule` events.
 
@@ -157,10 +165,12 @@ append never fails the underlying mutation.
 
 ## Molecules (`.pipeline/molecules/<id>.json`)
 
-Workflow templates live in `.pipeline/workflows.json`:
+Workflow templates live in `.pipeline/workflows.json`. A ready-to-copy starter set
+(bugfix / feature / docs / refactor, with a `default`) ships as
+[`workflows.example.json`](./workflows.example.json):
 
 ```json
-{ "workflows": {
+{ "default": "bugfix", "workflows": {
   "bugfix": { "steps": [
     { "agent": "worker" },
     { "agent": "tester", "when": "hasCodeChanges" },
@@ -171,8 +181,12 @@ Workflow templates live in `.pipeline/workflows.json`:
 }}
 ```
 
-`when` / `loop` are carried onto each step as metadata for the orchestrator to act
-on (Phase 2); `queue-molecule.sh` itself advances linearly. See
+The top-level `default` names the template used when intake doesn't pick one.
+Per-step `when` / `loop` are carried onto each molecule step as metadata and acted
+on by the orchestrator (Phase 2): `when` is a guard it skips when false; `loop`
+(`until-approved`) keeps re-dispatching `feedback-responder` until the human
+approves. `queue-molecule.sh` itself advances linearly — the orchestrator drives
+the conditional routing via `list`. See
 [`docs/DESIGN-molecules-audit.md`](../docs/DESIGN-molecules-audit.md) for the full design.
 
 ## Concurrency model

@@ -272,8 +272,28 @@ Self-pacing via ScheduleWakeup — no fixed cron. Adjust interval based on pipel
 
 When `.pipeline/config.json` has `backend: "filesystem"`, take the pipeline snapshot from the queue, not `gh pr list`:
 
-- **Snapshot** each review stage with `queue/queue-list.sh <state> --queue-dir <queueDir>` (or `agent-pipeline status --json`) and dispatch the matching review agent: `needs-work` → worker, `needs-test-review` → tester, `needs-code-review` → code-reviewer, `needs-feedback` → feedback-responder.
+- **Snapshot** each review stage with `queue/queue-list.sh <state> --queue-dir <queueDir>` (or `agent-pipeline status --json`) and dispatch the matching review agent: `needs-work` → worker, `needs-test-review` → tester, `needs-code-review` → code-reviewer, `needs-feedback` → feedback-responder. **When `.pipeline/workflows.json` is present, this fixed mapping is superseded by Molecule-driven dispatch (below); it remains the fallback for tickets without a molecule.**
 - **Intake stays Linear-coupled (out of scope for the GitHub-free loop in v1).** `ticket-creator` and `ticket-reviewer` use Linear, so `needs-triage/` and `needs-review/` are not auto-serviced here — in filesystem mode, tickets enter the queue directly in `needs-work/` (scanner output or a human drop). Porting those two agents to filesystem intake is future work.
 - **Unresolved-human-comment scan (every cycle)**: for every ticket in every state, read `comments[]` and flag any `author:"human"` comment with no LATER `author:"feedback-responder"` "Addressed" reply → dispatch `feedback-responder`. Do NOT use a timestamp cutoff. The pipeline is never idle while such a comment exists.
 - **`ready-for-human/`** is the human's queue (merge + move to `done/` manually) — no dispatch.
 - There are no PRs to scan and no `blocked-by:*` GitHub labels; backlog readiness is simply non-empty `needs-work/`.
+
+### Molecule-driven dispatch (filesystem backend)
+
+When `.pipeline/workflows.json` exists, drive dispatch from durable **molecules** (per-ticket workflow instances) instead of the fixed stage→agent mapping above. The molecule's cursor is the source of truth for "what runs next"; the queue state dirs remain the atomic-claim primitive and `events.jsonl` records every step. All helpers take `--queue-dir <q> --molecules-dir <m> --workflows <w>` (defaults under `.pipeline/`).
+
+Each cycle, in addition to (or in place of) the fixed mapping:
+
+1. **Ensure a molecule per active ticket.** For every ticket in `needs-work/` (and the in-flight review states) that has no `.pipeline/molecules/<id>.json`, instantiate one: `queue/queue-molecule.sh create <id> <template> --by orchestrator`. Choose `<template>` from the ticket's `type`/labels (`docs`, `refactor`, `feature`, …); fall back to the `default` template in `workflows.json`. This is the filesystem intake hook — keeping molecule creation here covers *both* scanner output and human drops without porting the Linear-coupled intake agents. (Idempotent: `create` refuses to clobber an existing molecule, so re-running a cycle is safe.)
+
+2. **List the runnable work.** `queue/queue-molecule.sh list --json` returns every *incomplete* molecule with its `next` step — `{agent, status}` plus any `when` / `loop` carried from the template. This replaces eyeballing each state dir.
+
+3. **For each molecule's `next` step:**
+   - **Evaluate `next.when`** (a guard) against the ticket. The starter conditions: `hasCodeChanges` (the worker/specialist produced a diff) and `touchesUI` (the diff includes UI files). If the guard is **false**, skip the step: `queue-molecule.sh advance <id> --status skipped --by orchestrator`, then re-list (the cursor has moved on). If true (or absent), proceed.
+   - **Dispatch `next.agent`** for that ticket — subject to the same anti-double-dispatch rules as the fixed mapping (skip if a recent `[agent:*]` claim/activity for this ticket exists). Pass the ticket id.
+   - **On success**, advance: `queue-molecule.sh advance <id> --status done --run <runId> --by <agent>`. **On failure**, `advance <id> --status failed` — this *holds* the cursor so the next cycle retries the same step.
+   - **`next.loop == "until-approved"`** (the `feedback-responder` step): do **not** auto-advance on success. Re-dispatch `feedback-responder` while unresolved human comments exist (per the unresolved-comment scan above); the human ends the loop by approving — moving the ticket to `ready-for-human/` → `done/`. Treat a ticket the human has moved out of the worked states as loop-complete (advance it `--status done` so the molecule closes).
+
+4. **Audit & history.** Every create / advance / skip / complete is mirrored into `events.jsonl`; `queue/queue-history.sh <id>` renders a ticket's full timeline (transitions, field edits, comments, and molecule steps together).
+
+**Fallback (locked decision #4):** if `workflows.json` is absent, or a ticket has no molecule, fall back to the fixed stage→agent mapping in the first bullet. Molecules supersede that mapping where present; the mapping stays as the backstop during the phased transition.

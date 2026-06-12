@@ -11,14 +11,17 @@
 #   next    <id>              print the current step's agent (empty line if complete)
 #   advance <id>              mark the current step done and move the cursor;
 #                             --status failed marks it failed and HOLDS the cursor
-#                             (so the step can be retried)
+#                             (retry); --status skipped advances past a step whose
+#                             `when` condition was not met
 #   status  <id>              print the molecule (human table, or --json)
+#   list                      list incomplete molecules + their next step (human
+#                             table, or --json) — the orchestrator's dispatch source
 #
 # Options:
 #   --molecules-dir <dir>   default .pipeline/molecules
 #   --queue-dir <dir>       default .pipeline/queue        (shared audit log)
 #   --workflows <file>      default .pipeline/workflows.json  (create only)
-#   --status done|failed    advance only (default: done)
+#   --status done|failed|skipped    advance only (default: done)
 #   --run <runId>           advance only — record which run executed the step
 #   --by <agent>            attribute the audit event to an agent
 #   --json                  status only — emit the raw molecule JSON
@@ -60,7 +63,12 @@ done
 ID="${POS[0]:-}"
 TEMPLATE="${POS[1]:-}"
 
-if [[ -z "$SUB" || -z "$ID" ]]; then
+if [[ -z "$SUB" ]]; then
+    echo "usage: $0 <create|next|advance|status|list> <id> [...]" >&2
+    exit 2
+fi
+# Every subcommand except `list` operates on a specific ticket.
+if [[ "$SUB" != "list" && -z "$ID" ]]; then
     echo "usage: $0 <create|next|advance|status> <id> [...]" >&2
     exit 2
 fi
@@ -122,8 +130,8 @@ case "$SUB" in
 
     advance)
         [[ -f "$MOL" ]] || { echo "no molecule: $ID" >&2; exit 1; }
-        if [[ "$STATUS" != "done" && "$STATUS" != "failed" ]]; then
-            echo "invalid --status: $STATUS (want done|failed)" >&2; exit 2
+        if [[ "$STATUS" != "done" && "$STATUS" != "failed" && "$STATUS" != "skipped" ]]; then
+            echo "invalid --status: $STATUS (want done|failed|skipped)" >&2; exit 2
         fi
         CUR="$(jq '.cursor' "$MOL")"
         LEN="$(jq '.steps | length' "$MOL")"
@@ -140,11 +148,12 @@ case "$SUB" in
             _emit action=advance "step=$STEP_AGENT" status=failed
             echo "step failed (cursor held for retry): $ID step=$STEP_AGENT"
         else
-            _write --arg at "$NOW" --arg run "$RUN" \
-                '.steps[.cursor].status = "done" | .steps[.cursor].at = $at
+            # done or skipped: stamp the status and advance the cursor.
+            _write --arg at "$NOW" --arg run "$RUN" --arg st "$STATUS" \
+                '.steps[.cursor].status = $st | .steps[.cursor].at = $at
                  | (if $run == "" then . else .steps[.cursor].run = $run end)
                  | .cursor += 1'
-            _emit action=advance "step=$STEP_AGENT" status=done
+            _emit action=advance "step=$STEP_AGENT" "status=$STATUS"
             if [[ "$(jq '.cursor' "$MOL")" -ge "$LEN" ]]; then
                 _emit action=complete
                 echo "molecule complete: $ID"
@@ -165,6 +174,7 @@ case "$SUB" in
                   ( $m.steps | to_entries[]
                     | "  " + (if .value.status == "done" then "✓"
                               elif .value.status == "failed" then "✗"
+                              elif .value.status == "skipped" then "⊘"
                               elif .key == $m.cursor then "→"
                               else "·" end)
                            + " " + .value.agent + " (" + .value.status + ")" )
@@ -172,8 +182,37 @@ case "$SUB" in
         fi
         ;;
 
+    list)
+        [[ -d "$MOLECULES_DIR" ]] || exit 0
+        files=()
+        for f in "$MOLECULES_DIR"/*.json; do [[ -e "$f" ]] && files+=("$f"); done
+        [[ ${#files[@]} -eq 0 ]] && exit 0
+        # Each incomplete molecule with its next runnable step, so the orchestrator
+        # can dispatch next.agent (and consult next.when / next.loop).
+        if [[ "$AS_JSON" -eq 1 ]]; then
+            jq -s '
+                [ .[] | . as $m | ($m.steps | length) as $len
+                  | select($m.cursor < $len)
+                  | { ticket: $m.ticket, template: $m.template,
+                      cursor: $m.cursor, total: $len,
+                      next: ({ agent: $m.steps[$m.cursor].agent, status: $m.steps[$m.cursor].status }
+                             + (if $m.steps[$m.cursor].when then { when: $m.steps[$m.cursor].when } else {} end)
+                             + (if $m.steps[$m.cursor].loop then { loop: $m.steps[$m.cursor].loop } else {} end)) } ]
+            ' "${files[@]}"
+        else
+            jq -rs '
+                .[] | . as $m | ($m.steps | length) as $len
+                | select($m.cursor < $len)
+                | [ $m.ticket, $m.template,
+                    "\($m.cursor)/\($len)",
+                    $m.steps[$m.cursor].agent,
+                    $m.steps[$m.cursor].status ] | @tsv
+            ' "${files[@]}"
+        fi
+        ;;
+
     *)
-        echo "usage: $0 <create|next|advance|status> <id> [...]" >&2
+        echo "usage: $0 <create|next|advance|status|list> <id> [...]" >&2
         exit 2
         ;;
 esac
