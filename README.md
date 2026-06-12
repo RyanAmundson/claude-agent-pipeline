@@ -65,6 +65,8 @@ agent-pipeline runs <runId> [--target <p>] [--follow] [--json]   Inspect / tail 
 agent-pipeline runs <runId> events [--target <p>] [--json]    Dump captured event log
 agent-pipeline runs kill <runId> [--target <p>]               Terminate a running supervisor
 agent-pipeline events [--target <p>] [--json]                 Live pipeline event stream (JSONL)
+agent-pipeline cycle report --data '<json>' [--target <p>]    Record an orchestrator cycle + print status block
+agent-pipeline watch [--target <p>]                           Live terminal dashboard (TUI)
 agent-pipeline ui [--target <p>] [--port N] [--open]          Launch dashboard + HTTP/SSE API
 ```
 
@@ -132,6 +134,12 @@ w.on('run.complete', ev => console.log(ev.run.runId, ev.run.cost));
 ```bash
 # 2. CLI (JSONL on stdout, language-agnostic)
 agent-pipeline events --target ~/Code/my-app --json | jq .
+```
+
+For a live terminal dashboard (stage counts, active runs, event tail, orchestrator cycle countdown):
+
+```bash
+agent-pipeline watch --target ~/Code/my-app
 ```
 
 ```js
