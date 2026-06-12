@@ -62,6 +62,11 @@ jq -r --arg id "$ID" '
             "comment      "
             + (if .verdict and .verdict != "null" then "[" + .verdict + "] " else "" end)
             + (.author // "?") + ": " + (.body // "")
+          elif .event == "molecule" then
+            "molecule     " + (.action // "?")
+            + (if .template then " " + .template else "" end)
+            + (if .step then " · " + .step else "" end)
+            + (if .status then " (" + .status + ")" else "" end)
           else
             .event + "   " + ($e | del(.ts, .ticket, .event, .by) | tostring)
           end

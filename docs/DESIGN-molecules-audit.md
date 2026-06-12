@@ -1,6 +1,6 @@
 # Design: Durable Molecules + Versioned Audit (Option C)
 
-**Status:** Phase 0 implemented; Phases 1–3 designed, not yet built.
+**Status:** Phases 0–1 implemented; Phases 2–3 designed, not yet built.
 **Scope:** filesystem backend only (`config.backend = "filesystem"`).
 **Provenance:** investigation into adopting Gas City SDK concepts (see below) into the
 existing pipeline.
@@ -104,9 +104,28 @@ honest (it's exactly what was applied) and replayable.
 
 ---
 
-## Phase 1 — Molecule data model (designed)
+## Phase 1 — Molecule data model (IMPLEMENTED)
 
 **Borrowed from:** Gas City Molecules (durable chained Bead workflows) + Formulas.
+
+### Surfaces added (as built)
+- `queue/queue-molecule.sh` — `create` (instantiate a template) / `next` (current
+  step's agent) / `advance` (mark step done + move cursor; `--status failed` holds
+  the cursor for retry) / `status` (human or `--json`). Per-ticket single-writer, so
+  writes use atomic tmp+rename without a lock.
+- `.pipeline/molecules/<id>.json` — the instance (see shape below).
+- `.pipeline/workflows.json` — the templates (see shape below).
+- Step transitions emit `molecule` events into the Phase 0 log
+  (`action` ∈ create|advance|complete, with `step`/`status`/`template`), rendered by
+  `queue-history.sh`.
+- `when` / `loop` from the template are carried onto each step as metadata for the
+  orchestrator to act on in Phase 2; `queue-molecule.sh` itself advances linearly.
+- `test/e2e/08-queue-molecule.sh` — 34 assertions.
+
+### Still deferred to Phase 2
+- Instantiating a molecule at intake (scanner / ticket-creator) and the orchestrator
+  reading cursors / evaluating `when`/`loop` to drive dispatch.
+
 
 **Workflow templates** — declarative, data not prose, in a new `.pipeline/workflows.json`:
 
@@ -142,7 +161,8 @@ honest (it's exactly what was applied) and replayable.
 
 - New `queue/queue-molecule.sh` — create (instantiate template), advance (move cursor on
   step completion), status. Step transitions emit `molecule` events into the Phase 0 log.
-- `scanner` / `ticket-creator` instantiate a molecule at intake.
+- `scanner` / `ticket-creator` instantiate a molecule at intake — **moved to Phase 2**
+  (the helper exists now; wiring agents to call it comes with the orchestrator change).
 - Crash-safety: the plan is on disk; a crashed step is detected as stale (reuse
   `queue-stale.sh` logic) and retried from the cursor.
 

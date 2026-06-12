@@ -107,6 +107,74 @@ queue-stale.sh --max-age-hours 4 --dry-run
 
 The cleanup agent runs this periodically.
 
+### `queue-event.sh <id> <event-type> [--by <agent>] [key=value ...]`
+
+Append one audit event to `<queue-dir>/events.jsonl` (append-only). Called
+internally by the mutating helpers after a successful change, and usable directly.
+A single-line `>>` append is atomic under `PIPE_BUF` (4 KB), so concurrent emits
+do not interleave — no lock needed for the log.
+
+```bash
+queue-event.sh TKT-001 transition --by worker from=needs-work to=in-progress
+```
+
+### `queue-history.sh <id> [--json]`
+
+Fold the event log into a ticket's timeline — human-readable lines, or `--json`
+for the raw matching JSONL.
+
+```bash
+queue-history.sh TKT-001
+# 2026-06-10T10:05Z  transition   needs-work → in-progress   (worker)
+# 2026-06-10T10:22Z  field        .pr_url="…"                (worker)
+# 2026-06-10T10:48Z  comment      [fail] code-reviewer: layer violation
+```
+
+### `queue-molecule.sh <create|next|advance|status> <id> [...]`
+
+Durable workflow (**molecule**) instances. A molecule is a per-ticket plan —
+an ordered list of agent steps plus a cursor, instantiated from a named template
+in `workflows.json`. It makes the advisory `chain:` handoff crash-safe: the plan
+is on disk, so a crashed step resumes from the cursor.
+
+```bash
+queue-molecule.sh create  TKT-001 bugfix        # instantiate from a template
+queue-molecule.sh next    TKT-001                # → the current step's agent
+queue-molecule.sh advance TKT-001 --by worker --run <runId>   # step done, cursor++
+queue-molecule.sh advance TKT-001 --status failed             # hold cursor for retry
+queue-molecule.sh status  TKT-001 [--json]
+```
+
+Step transitions are mirrored into `events.jsonl` as `molecule` events.
+
+## Audit log (`events.jsonl`)
+
+`<queue-dir>/events.jsonl` is the append-only history of every state transition,
+field edit, comment, stale re-queue, and molecule step. It is the zero-dependency
+analog of a versioned work store: full history without a database. `field` events
+record the raw jq `expr` (replayable). Emission is **best-effort** — a failed
+append never fails the underlying mutation.
+
+## Molecules (`.pipeline/molecules/<id>.json`)
+
+Workflow templates live in `.pipeline/workflows.json`:
+
+```json
+{ "workflows": {
+  "bugfix": { "steps": [
+    { "agent": "worker" },
+    { "agent": "tester", "when": "hasCodeChanges" },
+    { "agent": "code-reviewer" },
+    { "agent": "feedback-responder", "loop": "until-approved" }
+  ]},
+  "docs": { "steps": [ { "agent": "technical-docs-manager" }, { "agent": "code-reviewer" } ] }
+}}
+```
+
+`when` / `loop` are carried onto each step as metadata for the orchestrator to act
+on (Phase 2); `queue-molecule.sh` itself advances linearly. See
+[`docs/DESIGN-molecules-audit.md`](../docs/DESIGN-molecules-audit.md) for the full design.
+
 ## Concurrency model
 
 | Operation | Mechanism | Safety |
@@ -115,5 +183,7 @@ The cleanup agent runs this periodically.
 | Update a field | `flock` + `jq` + `mv` | Serialized. Last writer wins |
 | Transition states | `mv` | Atomic |
 | List a state | `find` | No locking; results may be slightly stale, that's fine |
+| Append an audit event | `>>` (O_APPEND) | Atomic under `PIPE_BUF` (4 KB); concurrent emits don't interleave |
+| Advance a molecule | `jq` + atomic rename | Per-ticket single-writer in practice (one active step) |
 
 This works on a single filesystem. It does NOT work across hosts (NFS atomicity is unreliable). If you need multi-host, switch to the Linear backend.
