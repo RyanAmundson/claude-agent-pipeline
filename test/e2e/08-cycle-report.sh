@@ -118,6 +118,9 @@ kill "$EV_PID" 2>/dev/null
 wait "$EV_PID" 2>/dev/null
 assert_contains "$(cat "$WORK/events.out")" '"type":"cycle.report"' "watcher emitted cycle.report"
 assert_eq "$(grep -c '"type":"cycle.report"' "$WORK/events.out")" "1" "emitted exactly once (no history replay, no double-emit)"
+# the emitted entry must be the line just appended, not a replayed earlier one
+EMITTED=$(grep '"type":"cycle.report"' "$WORK/events.out" | head -1 | jq -r '.cycle.cycle')
+assert_eq "$EMITTED" "$(tail -1 "$CY" | jq -r '.cycle')" "emitted entry matches the appended cycles.jsonl line"
 
 echo
 echo "08-cycle-report: all assertions passed"
