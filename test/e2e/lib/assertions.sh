@@ -38,7 +38,7 @@ assert_eq() {
 assert_contains() {
   # assert_contains <haystack> <needle> [<description>]
   local haystack=$1 needle=$2 desc=${3:-"contains '$needle'"}
-  if echo "$haystack" | grep -qF "$needle"; then _ok "$desc"
+  if echo "$haystack" | grep -qF -- "$needle"; then _ok "$desc"
   else _fail "$desc — '$needle' not found in: $haystack"; fi
 }
 
