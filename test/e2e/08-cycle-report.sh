@@ -110,7 +110,10 @@ $AP events --target "$WORK" --json > "$WORK/events.out" 2>/dev/null &
 EV_PID=$!
 sleep 1
 $AP cycle report --target "$WORK" --data '{"nextCheckSeconds":600}' >/dev/null
-sleep 1
+for _ in $(seq 1 25); do
+  grep -q '"type":"cycle.report"' "$WORK/events.out" 2>/dev/null && break
+  sleep 0.2
+done
 kill "$EV_PID" 2>/dev/null
 wait "$EV_PID" 2>/dev/null
 assert_contains "$(cat "$WORK/events.out")" '"type":"cycle.report"' "watcher emitted cycle.report"

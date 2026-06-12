@@ -566,6 +566,12 @@ function renderEvent(ev, flags, { runsOnly = false } = {}) {
     case 'run.fail':      console.log(`RUN✗   ${ev.runId}  exit=${ev.run?.exitCode}`); break;
     case 'run.kill':      console.log(`RUNK   ${ev.runId}`); break;
     case 'run.remove':    console.log(`RUN-   ${ev.runId}  [${ev.state}]`); break;
+    case 'cycle.report': {
+      const c = ev.cycle;
+      const ready = c.counts?.['ready-for-human'] || 0;
+      console.log(`CYCLE  #${c.cycle}  dispatched=${(c.dispatched || []).length} ready-for-human=${ready}`);
+      break;
+    }
   }
 }
 
