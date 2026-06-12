@@ -111,33 +111,36 @@ Before dispatching, spend ~60 seconds auditing how well the pipeline has been wo
    - An agent that's producing vacuous tests = update the tester prompt to specifically flag vacuous-test patterns.
    - A terminology mismatch that generated a the owner correction = dispatch glossary-maintainer.
 
-**Output**: If any improvements were made, note them in the cycle report under a `Self-audit actions:` line. If nothing needed fixing, omit the line entirely — don't pad.
+**Output**: If any improvements were made, add one `notes` entry per improvement to the cycle-report payload (§4), prefixed `self-audit:`. If nothing needed fixing, add nothing — don't pad.
 
 **Scope guardrail**: the self-audit must NOT rewrite wholesale agent prompts every cycle. Small, targeted additions only (1–3 line rules). If a prompt needs a major overhaul, flag it for the owner instead of rewriting unilaterally.
 
-### 4. Report
+### 4. Report (every cycle — idle cycles included)
 
-Post a summary each cycle:
+Do NOT hand-format a status table. After making this cycle's dispatch decisions, record the cycle and emit the canonical block:
+
+1. Build the payload:
+   - `counts` — GitHub/Linear mode: the label snapshot from step 1, keyed by queue-state names (`pipeline:needs-work` → `needs-work`), with PR refs (`#123`) as items. Filesystem mode: OMIT `counts` entirely — the CLI snapshots the queue itself.
+   - `dispatched` — one `{"agent","item"}` per agent dispatched this cycle.
+   - `running` — agents still running from earlier cycles: `{"agent","item","minutes"}`.
+   - `awaiting` — ticket ids / PR refs currently in ready-for-human.
+   - `notes` — one string per self-audit action (prefix `self-audit:`) and self-healing action (prefix `self-healing:`). Omit the field when nothing happened — don't pad.
+   - `nextCheckSeconds` — the ScheduleWakeup delay you are about to use.
+2. Run:
+
+   ```
+   agent-pipeline cycle report --data '<payload JSON>'
+   ```
+
+3. Paste the command's stdout VERBATIM as your cycle update. That block IS the report — do not wrap it in another table or restate it.
+
+Example:
 
 ```
-[agent:orchestrator] Pipeline health check
-
-Stage                      Items  Action
-──────────────────────────────────────────
-pipeline:needs-triage        0    — idle
-pipeline:needs-work          4    dispatched 2 workers
-pipeline:needs-test-review   2    dispatched 1 tester
-pipeline:needs-code-review   0    — idle
-pipeline:needs-feedback      1    dispatched 1 feedback-responder
-pipeline:ready-for-human     3    awaiting the owner
-blocked-by                   1    waiting on #576
-
-Agents dispatched this cycle: 4
-
-Self-audit actions:
-  ✓ Updated worker.md: require read of full ticket description before starting
-  ✓ Added rule to tester.md: flag vacuous tests asserting framework defaults
+agent-pipeline cycle report --data '{"dispatched":[{"agent":"worker","item":"fs-103"},{"agent":"tester","item":"fs-102"}],"running":[{"agent":"worker","item":"fs-099","minutes":6}],"awaiting":["fs-101"],"notes":["self-healing: re-queued stale fs-098"],"nextCheckSeconds":270}'
 ```
+
+This appends the cycle to `.pipeline/runs/cycles.jsonl`, which feeds `agent-pipeline events` and the `agent-pipeline watch` dashboard — skipping it makes the cycle invisible to every monitoring surface.
 
 ## What NOT to Do
 
@@ -220,14 +223,7 @@ Track test failures that exist on main so agents don't blame PRs for pre-existin
 
 ### Issue Log
 
-When an anomaly is detected and resolved, log it in the cycle report:
-
-```
-[agent:orchestrator] Self-healing actions:
-  ✓ Created missing label 'agent:tester'
-  ✓ Re-applied pipeline:ready-for-human to PR #579 (label was missing)
-  ⚠ PR #570 branch deleted — flagged for attention
-```
+When an anomaly is detected and resolved, record it as a `notes` entry in the cycle-report payload (§4), prefixed `self-healing:` — e.g. `"self-healing: created missing label agent:tester"`, `"self-healing: PR #570 branch deleted — flagged for attention"`.
 
 ## Resource Monitoring
 
@@ -273,6 +269,7 @@ Self-pacing via ScheduleWakeup — no fixed cron. Adjust interval based on pipel
 When `.pipeline/config.json` has `backend: "filesystem"`, take the pipeline snapshot from the queue, not `gh pr list`:
 
 - **Snapshot** each review stage with `queue/queue-list.sh <state> --queue-dir <queueDir>` (or `agent-pipeline status --json`) and dispatch the matching review agent: `needs-work` → worker, `needs-test-review` → tester, `needs-code-review` → code-reviewer, `needs-feedback` → feedback-responder.
+- **Report (every cycle)**: same as §4 — run `agent-pipeline cycle report --data '<payload>'` and paste its stdout verbatim. Omit `counts`; the CLI auto-snapshots the queue.
 - **Intake stays Linear-coupled (out of scope for the GitHub-free loop in v1).** `ticket-creator` and `ticket-reviewer` use Linear, so `needs-triage/` and `needs-review/` are not auto-serviced here — in filesystem mode, tickets enter the queue directly in `needs-work/` (scanner output or a human drop). Porting those two agents to filesystem intake is future work.
 - **Unresolved-human-comment scan (every cycle)**: for every ticket in every state, read `comments[]` and flag any `author:"human"` comment with no LATER `author:"feedback-responder"` "Addressed" reply → dispatch `feedback-responder`. Do NOT use a timestamp cutoff. The pipeline is never idle while such a comment exists.
 - **`ready-for-human/`** is the human's queue (merge + move to `done/` manually) — no dispatch.
