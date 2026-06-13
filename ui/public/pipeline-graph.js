@@ -151,3 +151,41 @@ export function countsOf(model) {
   }
   return counts;
 }
+
+// ─── backend-neutral count source ───────────────────────────────────────────
+// Filesystem backends have a real queue the watcher tails, so per-state counts
+// come from the ticket model (seedModel/applyEvent). Linear/GitHub backends
+// have no queue — the orchestrator's cycle.report is the ONLY source of counts
+// and of which agents are running. These pure helpers let pipeline.js pick the
+// right source without importing any DOM.
+
+/** Zero-filled per-state counts overlaid with a cycle report's `counts`. */
+export function countsFromCycle(cycle) {
+  const counts = {};
+  for (const node of Object.values(NODES)) {
+    if (node.state) counts[node.state] = 0;
+  }
+  for (const [state, n] of Object.entries(cycle?.counts || {})) {
+    if (state in counts) counts[state] = n;
+  }
+  return counts;
+}
+
+/** Agent names a cycle report lists as running (skips malformed entries). */
+export function runningAgentsFromCycle(cycle) {
+  const out = [];
+  for (const r of cycle?.running || []) {
+    if (r && typeof r.agent === 'string') out.push(r.agent);
+  }
+  return out;
+}
+
+/**
+ * Which count source to trust for a given cycle: 'cycle' for non-filesystem
+ * backends (Linear/GitHub — no queue to model), 'model' for filesystem or when
+ * no cycle has been reported yet.
+ */
+export function countSourceForCycle(cycle) {
+  const backend = cycle?.backend;
+  return backend && backend !== 'filesystem' ? 'cycle' : 'model';
+}

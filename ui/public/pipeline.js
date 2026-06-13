@@ -5,6 +5,7 @@
 import {
   NODES, EDGES, VIEW, pathFor,
   seedModel, applyEvent, countsOf, hasTicket, pathEdgesForMove,
+  countsFromCycle, runningAgentsFromCycle, countSourceForCycle,
 } from './pipeline-graph.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -30,6 +31,12 @@ let statusEl = null;
 const edgeEls = new Map();   // edge id → <path>
 const nodeEls = new Map();   // node id → { g, countText, countBg }
 let model = { idState: new Map() };
+// Latest orchestrator cycle + snapshot. On filesystem backends counts come from
+// `model` (ticket.* events); on Linear/GitHub there is no queue, so counts and
+// running agents come from the cycle report. Cycles are append-only — keep the
+// last one across a later null/empty snapshot (a refetch race).
+let latestCycle = null;
+let lastSnapshot = null;
 
 function el(name, attrs = {}) {
   const e = document.createElementNS(SVGNS, name);
@@ -79,8 +86,27 @@ function buildGraph() {
   return true;
 }
 
+// Per-state counts from whichever source the current backend trusts.
+function currentCounts() {
+  return countSourceForCycle(latestCycle) === 'cycle'
+    ? countsFromCycle(latestCycle)
+    : countsOf(model);
+}
+
+// Agents to pulse: filesystem run records (from the snapshot) ∪ the cycle
+// report's running list (the only running signal on Linear/GitHub, and a
+// supplement for in-session Task subagents on filesystem).
+function runningAgentSet() {
+  const set = new Set();
+  for (const a of lastSnapshot?.agents || []) {
+    if ((a.activity?.runs || []).length) set.add(a.name);
+  }
+  for (const name of runningAgentsFromCycle(latestCycle)) set.add(name);
+  return set;
+}
+
 function renderCounts() {
-  const counts = countsOf(model);
+  const counts = currentCounts();
   for (const [id, n] of Object.entries(NODES)) {
     if (!n.state) continue;
     const els = nodeEls.get(id);
@@ -90,25 +116,36 @@ function renderCounts() {
   }
 }
 
-function renderRunning(snapshot) {
-  const runningAgents = new Set(
-    (snapshot.agents || [])
-      .filter(a => (a.activity?.runs || []).length)
-      .map(a => a.name),
-  );
+function renderRunning() {
+  const running = runningAgentSet();
   for (const [id, n] of Object.entries(NODES)) {
-    nodeEls.get(id).g.classList.toggle('running', !!n.agent && runningAgents.has(n.agent));
+    nodeEls.get(id).g.classList.toggle('running', !!n.agent && running.has(n.agent));
+  }
+}
+
+function updateStatus() {
+  if (!statusEl) return;
+  const total = Object.values(currentCounts()).reduce((a, b) => a + b, 0);
+  const via = countSourceForCycle(latestCycle) === 'cycle' ? ` · ${latestCycle.backend}` : '';
+  statusEl.textContent = `${total} ticket${total === 1 ? '' : 's'} in flight${via}`;
+}
+
+// Briefly highlight every state node whose count changed between two snapshots
+// of counts (used when a cycle report shifts Linear/GitHub counts wholesale).
+function flashChangedNodes(prev, cur) {
+  for (const n of Object.values(NODES)) {
+    if (!n.state) continue;
+    if ((prev[n.state] || 0) !== (cur[n.state] || 0)) flashNode(n.state);
   }
 }
 
 function applySnapshot(snapshot) {
   model = seedModel(snapshot);
+  lastSnapshot = snapshot;
+  if (snapshot.cycle) latestCycle = snapshot.cycle;  // append-only; never clear
   renderCounts();
-  renderRunning(snapshot);
-  if (statusEl) {
-    const total = Object.values(countsOf(model)).reduce((a, b) => a + b, 0);
-    statusEl.textContent = `${total} ticket${total === 1 ? '' : 's'} in flight`;
-  }
+  renderRunning();
+  updateStatus();
 }
 
 let es = null;
@@ -179,6 +216,16 @@ function colorForTicket(ticket) {
 }
 
 function handleEvent(ev) {
+  if (ev.type === 'cycle.report') {
+    // The only live count/running signal on Linear/GitHub (no queue to watch).
+    const before = currentCounts();
+    latestCycle = ev.cycle;
+    renderCounts();
+    renderRunning();
+    updateStatus();
+    if (countSourceForCycle(latestCycle) === 'cycle') flashChangedNodes(before, currentCounts());
+    return;
+  }
   if (ev.type === 'ticket.move') {
     const edges = pathEdgesForMove(ev.from, ev.to);
     const color = colorForTicket(ev.ticket);

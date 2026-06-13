@@ -123,3 +123,39 @@ test('hasTicket reports prior membership (for entry detection)', () => {
   assert.equal(hasTicket(m, 'A'), true);
   assert.equal(hasTicket(m, 'Z'), false);
 });
+
+import {
+  countsFromCycle, runningAgentsFromCycle, countSourceForCycle,
+} from '../../ui/public/pipeline-graph.js';
+
+// ─── Linear/GitHub backend: counts + running come from the cycle report ──────
+// On non-filesystem backends there is no queue to watch, so the orchestrator's
+// cycle.report is the only source of per-state counts and which agents run.
+
+test('countsFromCycle zero-fills known states and overlays cycle counts', () => {
+  const c = countsFromCycle({ counts: { 'needs-work': 3, 'ready-for-human': 1, bogus: 9 } });
+  assert.equal(c['needs-work'], 3);
+  assert.equal(c['ready-for-human'], 1);
+  assert.equal(c['needs-triage'], 0);   // zero-filled
+  assert.equal('bogus' in c, false);    // unknown state ignored
+});
+
+test('countsFromCycle handles a null/empty cycle', () => {
+  assert.equal(countsFromCycle(null)['needs-work'], 0);
+  assert.equal(countsFromCycle({})['done'], 0);
+});
+
+test('runningAgentsFromCycle extracts agent names (skips malformed)', () => {
+  assert.deepEqual(
+    runningAgentsFromCycle({ running: [{ agent: 'code-reviewer', item: '#1' }, { agent: 'tester' }, { item: 'x' }] }),
+    ['code-reviewer', 'tester'],
+  );
+  assert.deepEqual(runningAgentsFromCycle(null), []);
+});
+
+test('countSourceForCycle: filesystem→model, linear/github→cycle, none→model', () => {
+  assert.equal(countSourceForCycle({ backend: 'filesystem' }), 'model');
+  assert.equal(countSourceForCycle({ backend: 'linear' }), 'cycle');
+  assert.equal(countSourceForCycle({ backend: 'github' }), 'cycle');
+  assert.equal(countSourceForCycle(null), 'model');
+});
