@@ -109,7 +109,11 @@ function route(req, res, apiOpts, sseClients, logClients, logStream) {
 
   if (path === '/' || path === '/index.html') return sendStatic(res, 'index.html');
   if (path.startsWith('/public/'))            return sendStatic(res, path.replace(/^\/public\//, ''));
-  if (path === '/app.js' || path === '/style.css' || path === '/favicon.ico')
+  // Any root-level asset with a known extension (app.js, pipeline.js,
+  // pipeline-graph.js, style.css, favicon.ico, …). Single-segment only, so it
+  // never shadows the /api/ routes below; sendStatic guards path traversal and
+  // 404s anything missing.
+  if (path !== '/' && !path.includes('/', 1) && extname(path) in MIME)
     return sendStatic(res, path.slice(1));
 
   if (path === '/api/v1/snapshot') {
