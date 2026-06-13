@@ -51,6 +51,8 @@ Post exactly one comment whose body contains a single fenced ```json block the o
 queue/queue-comment.sh <id> --author relevance-checker --body "$BODY"
 ```
 
+Do **not** pass `--verdict` to `queue-comment.sh` — that field only accepts `pass|fail` (a code-review verdict). Your verdict lives inside `$BODY`'s fenced JSON, which the orchestrator parses.
+
 (GitHub/Linear backends: post the same body as a PR/issue comment via `gh pr comment` / the Linear comment tool, and apply the `pipeline:relevance-*` label the orchestrator expects.) The body MUST be:
 
 ````
