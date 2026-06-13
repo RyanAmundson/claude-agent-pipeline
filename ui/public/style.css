@@ -227,6 +227,10 @@ body:not([data-view="log"]) .log-only { display: none; }
 .pl-edge.kind-park    { stroke: var(--dim); stroke-dasharray: 2 3; opacity: 0.6; }
 .pl-edge.kind-regen   { stroke: var(--dim); stroke-dasharray: 1 5; opacity: 0.35; }
 .pl-edge.kind-feed    { stroke: var(--dim); stroke-dasharray: 1 4; opacity: 0.3; }
+/* orchestrator dispatch lines: invisible until the orchestrator provisions an
+   agent at that stage, then the line lights green for the token's travel. */
+.pl-edge.kind-dispatch        { stroke: var(--ok); stroke-dasharray: 2 5; opacity: 0; }
+.pl-edge.kind-dispatch.active { opacity: 0.4; transition: opacity 0.15s; }
 .pl-edge.flash        { stroke: var(--text); opacity: 1; transition: stroke 0.1s, opacity 0.1s; }
 
 /* nodes */
@@ -266,12 +270,25 @@ body:not([data-view="log"]) .log-only { display: none; }
 }
 .pl-node.flash .pl-node-box { stroke: var(--text); stroke-width: 2; }
 
+/* back-pressure halo (amber, outside the box) — a stage whose queue outruns its
+   agents. Hidden until .pressure, then a slow amber breathe marks the hot spot. */
+.pl-node-pressure {
+  fill: none; stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 5 3; opacity: 0;
+}
+.pl-node.pressure .pl-node-pressure {
+  opacity: 1; animation: pulse-pressure 1.6s ease-in-out infinite;
+}
+@keyframes pulse-pressure { 50% { stroke-opacity: 0.3; } }
+
 /* legend: which badge is which */
 .pl-legend-label { fill: var(--dim); font-size: 10px; }
+.pl-legend-pressure { fill: none; stroke: var(--warn); stroke-width: 2; stroke-dasharray: 3 2; }
 
 /* tokens */
 .pl-token { fill: var(--accent); stroke: var(--bg); stroke-width: 0.5; }
+.pl-token.dispatch { fill: var(--ok); }
 
 @media (prefers-reduced-motion: reduce) {
   .pl-node.running .pl-node-box { animation: none; }
+  .pl-node.pressure .pl-node-pressure { animation: none; }
 }
