@@ -62,6 +62,16 @@ export const EDGES = [
   // feeders (detectors + utility flow findings into triage)
   { id: 'feed:detectors',    from: 'detectors',         to: 'needs-triage',      kind: 'feed',    bend: 0 },
   { id: 'feed:utility',      from: 'utility',           to: 'needs-triage',      kind: 'feed',    bend: 0 },
+  // orchestrator control plane: one dispatch edge per agent-stage. Invisible at
+  // rest (see .kind-dispatch CSS); a token pulses down it when the orchestrator
+  // provisions a new agent at that step, so you can see WHERE it's load-balancing.
+  { id: 'dispatch:needs-triage',      from: 'orchestrator', to: 'needs-triage',      kind: 'dispatch', bend: -30 },
+  { id: 'dispatch:needs-review',      from: 'orchestrator', to: 'needs-review',      kind: 'dispatch', bend: -20 },
+  { id: 'dispatch:in-progress',       from: 'orchestrator', to: 'in-progress',       kind: 'dispatch', bend: 0 },
+  { id: 'dispatch:needs-test-review', from: 'orchestrator', to: 'needs-test-review', kind: 'dispatch', bend: 20 },
+  { id: 'dispatch:needs-code-review', from: 'orchestrator', to: 'needs-code-review', kind: 'dispatch', bend: 30 },
+  { id: 'dispatch:needs-feedback',    from: 'orchestrator', to: 'needs-feedback',    kind: 'dispatch', bend: 40 },
+  { id: 'dispatch:done',              from: 'orchestrator', to: 'done',              kind: 'dispatch', bend: 60 },
 ];
 
 // Direct from→to → edge id (built from EDGES).
@@ -235,4 +245,65 @@ export function runningAgentNames(snapshot, cycle) {
     for (let i = 0; i < k; i++) names.push(a.name);
   }
   return names;
+}
+
+// ─── back-pressure + orchestrator provisioning ──────────────────────────────
+// The pipeline is meant to read as a self-managing, load-balanced system: each
+// agent-stage drains an inbound queue, the orchestrator watches those queues and
+// provisions more agents where work piles up. These helpers expose (a) which
+// stages are under-provisioned right now, and (b) when allocation just changed.
+
+// Each stage drains a queue. For most stages the inbound queue is the home node's
+// own state; the worker is the exception — it pulls from `needs-work` into
+// `in-progress`, so its back-pressure piles up on `needs-work` while its agents
+// are counted at `in-progress`.
+export const STAGES = [
+  { node: 'needs-triage',      queue: 'needs-triage' },
+  { node: 'needs-review',      queue: 'needs-review' },
+  { node: 'in-progress',       queue: 'needs-work' },
+  { node: 'needs-test-review', queue: 'needs-test-review' },
+  { node: 'needs-code-review', queue: 'needs-code-review' },
+  { node: 'needs-feedback',    queue: 'needs-feedback' },
+  { node: 'done',              queue: 'done' },
+];
+
+/**
+ * Back-pressure per stage: the queued work its current agents don't yet cover
+ * (`queued − agents`, floored at 0). Keyed by the NODE that displays it — the
+ * inbound-queue node, which for the worker is `needs-work` (where the backlog
+ * visibly stacks up). Only positive entries are returned.
+ * @param {Record<string,number>} counts per-state ticket counts
+ * @param {Record<string,number>} agentsByNode running agents per home node
+ * @returns {Record<string,number>} queueNodeId → pressure level
+ */
+export function backPressureByNode(counts, agentsByNode) {
+  const out = {};
+  for (const s of STAGES) {
+    const queued = counts?.[s.queue] || 0;
+    const agents = agentsByNode?.[s.node] || 0;
+    const pressure = queued - agents;
+    if (pressure > 0) out[s.queue] = pressure;
+  }
+  return out;
+}
+
+/**
+ * Nodes where the running-agent count rose between two cycles — i.e. the
+ * orchestrator just provisioned agents there. Returns [{node, added}]. Decreases
+ * and unchanged nodes are omitted; a null/empty prev yields no events (we don't
+ * treat the first observation as a fresh dispatch).
+ */
+export function provisioningEvents(prev, next) {
+  const events = [];
+  const nodes = new Set([...Object.keys(prev || {}), ...Object.keys(next || {})]);
+  for (const node of nodes) {
+    const added = (next?.[node] || 0) - (prev?.[node] || 0);
+    if (added > 0) events.push({ node, added });
+  }
+  return events;
+}
+
+/** The orchestrator→stage dispatch edge id for a stage's home node. */
+export function dispatchEdgeId(node) {
+  return `dispatch:${node}`;
 }

@@ -7,6 +7,7 @@ import {
   seedModel, applyEvent, countsOf, hasTicket, pathEdgesForMove,
   countsFromCycle, countSourceForCycle,
   agentCountsByNode, runningAgentNames,
+  backPressureByNode, provisioningEvents, dispatchEdgeId,
 } from './pipeline-graph.js';
 import { colorForAgent } from './colors.js';
 
@@ -35,6 +36,11 @@ let model = { idState: new Map() };
 // last one across a later null/empty snapshot (a refetch race).
 let latestCycle = null;
 let lastSnapshot = null;
+// Per-node running-agent counts from the previous render, so we can detect when
+// the orchestrator provisions a new agent (count rose) and pulse a dispatch down
+// to that step. Seeded on first render so the initial fleet doesn't all "fire".
+let prevAgentsByNode = {};
+let agentsSeeded = false;
 
 function el(name, attrs = {}) {
   const e = document.createElementNS(SVGNS, name);
@@ -64,6 +70,9 @@ function buildGraph() {
     const title = el('title');
     title.textContent = n.agent ? `${n.label} — ${n.agent}` : n.label;
     g.append(title);
+    // Back-pressure halo (amber, outside the box) — shown only when this node's
+    // queue outruns its agents. Drawn before the box so the box sits on top.
+    if (n.state) g.append(el('rect', { class: 'pl-node-pressure', x: -57, y: -27, width: 114, height: 54, rx: 9 }));
     g.append(el('rect', { class: 'pl-node-box', x: -52, y: -22, width: 104, height: 44, rx: 6 }));
     const label = el('text', { class: 'pl-node-label', y: n.agent ? -2 : 5 });
     label.textContent = n.label;
@@ -86,16 +95,17 @@ function buildGraph() {
       agentText = el('text', { class: 'pl-node-agentcount', x: 52, y: 25.5 });
       g.append(agentBg, agentText);
     }
-    nodeEls.set(id, { g, countText, countBg, agentBg, agentText });
+    nodeEls.set(id, { g, title, countText, countBg, agentBg, agentText });
     nodeLayer.append(g);
   }
 
-  // Legend: distinguishes the two badges (tickets queued vs agents working).
+  // Legend: distinguishes the badges + the back-pressure halo.
   const legend = el('g', { class: 'pl-legend', transform: 'translate(24,22)' });
   const swatch = (cx, cls) => el('circle', { class: cls, cx, cy: 0, r: 6 });
   const lbl = (x, t) => { const e = el('text', { class: 'pl-legend-label', x, y: 4 }); e.textContent = t; return e; };
   legend.append(swatch(0, 'pl-node-countbg'), lbl(10, 'tickets queued'),
-                swatch(120, 'pl-node-agentbg'), lbl(130, 'agents working'));
+                swatch(120, 'pl-node-agentbg'), lbl(130, 'agents working'),
+                swatch(248, 'pl-legend-pressure'), lbl(258, 'back-pressure'));
   nodeLayer.append(legend);
 
   svg.append(edgeLayer, tokenLayer, nodeLayer);
@@ -120,18 +130,56 @@ function renderCounts() {
   }
 }
 
-// How many agents are working at each node, and pulse those nodes. The running
-// list comes from the cycle report when present (the orchestrator's
+// How many agents are working at each node, plus the two derived load-balancer
+// signals: which stages are under back-pressure (queue deeper than its agents),
+// and where the orchestrator just provisioned (agent count rose since last time).
+// The running list comes from the cycle report when present (the orchestrator's
 // authoritative dispatch list, and the only signal on Linear/GitHub), else from
 // filesystem run records — see runningAgentNames().
 function renderAgents() {
   const byNode = agentCountsByNode(runningAgentNames(lastSnapshot, latestCycle));
+  const pressure = backPressureByNode(currentCounts(), byNode);
+
   for (const [id, n] of Object.entries(NODES)) {
     const els = nodeEls.get(id);
     const c = (n.agent && n.agentHome !== false) ? (byNode[id] || 0) : 0;
     if (els.agentText) els.agentText.textContent = String(c);
     els.g.classList.toggle('has-agents', c > 0);
     els.g.classList.toggle('running', c > 0);
+    // Back-pressure halo on the queue node that's outrunning its agents.
+    const p = pressure[id] || 0;
+    els.g.classList.toggle('pressure', p > 0);
+    if (n.state) {
+      const base = n.agent ? `${n.label} — ${n.agent}` : n.label;
+      els.title.textContent = p > 0 ? `${base} · back-pressure: ${p}` : base;
+    }
+  }
+
+  // Orchestrator provisioning: pulse a dispatch from the orchestrator down to any
+  // stage whose agent count just rose. Seed silently on the first render.
+  if (agentsSeeded) {
+    for (const { node, added } of provisioningEvents(prevAgentsByNode, byNode)) {
+      pulseDispatch(node, added);
+    }
+  }
+  prevAgentsByNode = byNode;
+  agentsSeeded = true;
+}
+
+// Pulse the orchestrator's control-plane edge to a stage it's provisioning: flash
+// the orchestrator, light the (normally invisible) dispatch line, and send one
+// green token per added agent (capped) down to the node.
+function pulseDispatch(node, added = 1) {
+  flashNode('orchestrator');
+  const edgeId = dispatchEdgeId(node);
+  const edge = edgeEls.get(edgeId);
+  if (REDUCED || !edge) { flashNode(node); return; }
+  edge.classList.add('active');
+  const n = Math.min(added, 3);
+  let pending = n;
+  const done = () => { if (--pending <= 0) { edge.classList.remove('active'); flashNode(node); } };
+  for (let i = 0; i < n; i++) {
+    setTimeout(() => spawnToken(edgeId, null, done, 'dispatch'), i * 140);
   }
 }
 
@@ -194,11 +242,11 @@ function tick(ts) {
   raf = tokens.length ? requestAnimationFrame(tick) : ((lastTs = 0), null);
 }
 
-function spawnToken(edgeId, color, onDone) {
+function spawnToken(edgeId, color, onDone, cls) {
   const pathEl = edgeEls.get(edgeId);
   if (!pathEl) { onDone && onDone(); return; }
   const len = pathEl.getTotalLength();
-  const dot = el('circle', { class: 'pl-token', r: TOKEN_R, cx: 0, cy: 0 });
+  const dot = el('circle', { class: cls ? `pl-token ${cls}` : 'pl-token', r: TOKEN_R, cx: 0, cy: 0 });
   if (color) dot.style.fill = color;
   document.getElementById('pl-tokens').append(dot);
   tokens.push({ el: dot, pathEl, len, t: 0, onDone });

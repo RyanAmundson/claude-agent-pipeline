@@ -211,3 +211,70 @@ test('runningAgentNames falls back to filesystem run records', () => {
   );
   assert.deepEqual(names.sort(), ['worker', 'worker']);
 });
+
+// ─── back-pressure + orchestrator provisioning ──────────────────────────────
+import {
+  STAGES, backPressureByNode, provisioningEvents, dispatchEdgeId,
+} from '../../ui/public/pipeline-graph.js';
+
+test('every stage drains a real queue and (except the worker) is its own node', () => {
+  for (const s of STAGES) {
+    assert.ok(NODES[s.node], `stage node ${s.node} missing`);
+    assert.ok(NODES[s.queue], `stage queue ${s.queue} missing`);
+  }
+  // the worker is the special case: home node ≠ inbound queue
+  const worker = STAGES.find(s => s.node === 'in-progress');
+  assert.equal(worker.queue, 'needs-work');
+});
+
+test('backPressureByNode flags queues deeper than their agents, keyed by queue node', () => {
+  const counts = { 'needs-code-review': 3, 'needs-review': 1, 'needs-work': 4 };
+  const agents = { 'needs-code-review': 2, 'needs-review': 1, 'in-progress': 1 };
+  const bp = backPressureByNode(counts, agents);
+  assert.equal(bp['needs-code-review'], 1);   // 3 queued − 2 agents
+  assert.equal('needs-review' in bp, false);  // 1 queued, 1 agent → covered
+  assert.equal(bp['needs-work'], 3);          // worker backlog: 4 − 1 worker, shown on needs-work
+});
+
+test('backPressureByNode is empty when every queue is covered', () => {
+  const bp = backPressureByNode({ 'needs-review': 2 }, { 'needs-review': 2 });
+  assert.deepEqual(bp, {});
+});
+
+test('backPressureByNode tolerates missing counts/agents', () => {
+  assert.deepEqual(backPressureByNode(null, null), {});
+  assert.deepEqual(backPressureByNode({ 'needs-review': 2 }, null), { 'needs-review': 2 });
+});
+
+test('provisioningEvents reports nodes where the agent count rose', () => {
+  const ev = provisioningEvents(
+    { 'in-progress': 1, 'needs-code-review': 2 },
+    { 'in-progress': 3, 'needs-code-review': 2, 'needs-test-review': 1 },
+  );
+  const byNode = Object.fromEntries(ev.map(e => [e.node, e.added]));
+  assert.equal(byNode['in-progress'], 2);       // 1 → 3
+  assert.equal(byNode['needs-test-review'], 1); // 0 → 1 (new)
+  assert.equal('needs-code-review' in byNode, false); // unchanged
+});
+
+test('provisioningEvents ignores decreases and first-seen empty prev', () => {
+  assert.deepEqual(provisioningEvents({ 'in-progress': 3 }, { 'in-progress': 1 }), []);
+  assert.deepEqual(provisioningEvents(null, {}), []);
+});
+
+test('dispatchEdgeId maps a stage node to its orchestrator dispatch edge', () => {
+  const id = dispatchEdgeId('in-progress');
+  const edge = EDGES.find(e => e.id === id);
+  assert.ok(edge, 'dispatch edge exists');
+  assert.equal(edge.from, 'orchestrator');
+  assert.equal(edge.to, 'in-progress');
+  assert.equal(edge.kind, 'dispatch');
+});
+
+test('every stage has an orchestrator dispatch edge', () => {
+  for (const s of STAGES) {
+    const edge = EDGES.find(e => e.id === dispatchEdgeId(s.node));
+    assert.ok(edge, `stage ${s.node} has a dispatch edge`);
+    assert.equal(edge.from, 'orchestrator');
+  }
+});
