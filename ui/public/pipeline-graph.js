@@ -1,0 +1,83 @@
+// Pure topology + reducers for the pipeline graph view.
+// No DOM — importable in Node (unit tests) and the browser (pipeline.js).
+
+// SVG canvas; used as the <svg> viewBox. Coordinates below are tunable.
+export const VIEW = { w: 1120, h: 560 };
+
+// Each node has a center (x, y). `kind` drives styling. `agent` is the owning
+// agent shown beneath the node. `state` (when present) is the queue state whose
+// live ticket count the node displays.
+export const NODES = {
+  scanner:             { label: 'scan',        agent: 'scanner',            x: 70,   y: 250, kind: 'entry' },
+  'needs-triage':      { label: 'triage',      agent: 'ticket-creator',     x: 210,  y: 250, kind: 'state', state: 'needs-triage' },
+  'needs-review':      { label: 'review',      agent: 'ticket-reviewer',    x: 340,  y: 250, kind: 'state', state: 'needs-review' },
+  'needs-work':        { label: 'work',        agent: 'worker',             x: 470,  y: 250, kind: 'state', state: 'needs-work' },
+  'in-progress':       { label: 'in-progress', agent: 'worker',             x: 600,  y: 250, kind: 'state', state: 'in-progress' },
+  'needs-test-review': { label: 'test',        agent: 'tester',             x: 730,  y: 250, kind: 'state', state: 'needs-test-review' },
+  'needs-code-review': { label: 'code-review', agent: 'code-reviewer',      x: 870,  y: 250, kind: 'state', state: 'needs-code-review' },
+  'ready-for-human':   { label: 'ready',       agent: null,                 x: 1010, y: 250, kind: 'state', state: 'ready-for-human' },
+  human:               { label: '\u{1F464} human', agent: null,             x: 1010, y: 110, kind: 'human' },
+  done:                { label: 'done',        agent: 'cleanup',            x: 1010, y: 410, kind: 'exit',  state: 'done' },
+  'needs-feedback':    { label: 'feedback',    agent: 'feedback-responder', x: 800,  y: 410, kind: 'state', state: 'needs-feedback' },
+  'needs-info':        { label: 'needs-info',  agent: 'ticket-reviewer',    x: 340,  y: 410, kind: 'park',  state: 'needs-info' },
+  obsolete:            { label: 'obsolete',    agent: 'relevance-checker',  x: 470,  y: 410, kind: 'exit',  state: 'obsolete' },
+  // chrome: off-path agents (no state → no count badge). orchestrator pulses
+  // when an orchestrator run is active; the feeders flow findings into triage.
+  orchestrator:        { label: 'orchestrator', agent: 'orchestrator',      x: 560,  y: 40,  kind: 'meta' },
+  detectors:           { label: 'detectors ⟳', agent: null,            x: 70,   y: 120, kind: 'feeder' },
+  utility:             { label: 'utility ⛭',   agent: null,            x: 210,  y: 120, kind: 'feeder' },
+};
+
+// Edges. `bend` offsets the bezier control point perpendicular to the chord
+// (px): 0 = straight, sign picks the bow direction. `kind` drives styling.
+export const EDGES = [
+  // base spine (happy path)
+  { id: 'spine:triage',      from: 'scanner',           to: 'needs-triage',      kind: 'spine',   bend: 0 },
+  { id: 'spine:review',      from: 'needs-triage',      to: 'needs-review',      kind: 'spine',   bend: 0 },
+  { id: 'spine:work',        from: 'needs-review',      to: 'needs-work',        kind: 'spine',   bend: 0 },
+  { id: 'spine:inprogress',  from: 'needs-work',        to: 'in-progress',       kind: 'spine',   bend: 0 },
+  { id: 'spine:test',        from: 'in-progress',       to: 'needs-test-review', kind: 'spine',   bend: 0 },
+  { id: 'spine:codereview',  from: 'needs-test-review', to: 'needs-code-review', kind: 'spine',   bend: 0 },
+  { id: 'spine:ready',       from: 'needs-code-review', to: 'ready-for-human',   kind: 'spine',   bend: 0 },
+  // human handoff <-> re-entry
+  { id: 'handoff:human',     from: 'ready-for-human',   to: 'human',             kind: 'exit',    bend: 0 },
+  { id: 'merge:done',        from: 'human',             to: 'done',              kind: 'exit',    bend: 40 },
+  { id: 'human:reentry',     from: 'ready-for-human',   to: 'needs-feedback',    kind: 'reentry', bend: 60 },
+  // review-fail loop
+  { id: 'fail:test',         from: 'needs-test-review', to: 'needs-feedback',    kind: 'loop',    bend: 50 },
+  { id: 'fail:codereview',   from: 'needs-code-review', to: 'needs-feedback',    kind: 'loop',    bend: 30 },
+  { id: 'feedback:rereview', from: 'needs-feedback',    to: 'needs-code-review', kind: 'loop',    bend: -40 },
+  // park <-> resume
+  { id: 'park:info',         from: 'needs-review',      to: 'needs-info',        kind: 'park',    bend: 0 },
+  { id: 'info:resume',       from: 'needs-info',        to: 'needs-review',      kind: 'reentry', bend: 30 },
+  // stale re-queue + post-merge re-scan
+  { id: 'stale:requeue',     from: 'in-progress',       to: 'needs-work',        kind: 'loop',    bend: -60 },
+  { id: 'rescan:regen',      from: 'done',              to: 'scanner',           kind: 'regen',   bend: 120 },
+  // reserved: relevance-checker
+  { id: 'obsolete:work',     from: 'needs-work',        to: 'obsolete',          kind: 'exit',    bend: 0 },
+  { id: 'obsolete:ready',    from: 'ready-for-human',   to: 'obsolete',          kind: 'exit',    bend: 80 },
+  // feeders (detectors + utility flow findings into triage)
+  { id: 'feed:detectors',    from: 'detectors',         to: 'needs-triage',      kind: 'feed',    bend: 0 },
+  { id: 'feed:utility',      from: 'utility',           to: 'needs-triage',      kind: 'feed',    bend: 0 },
+];
+
+// Direct from→to → edge id (built from EDGES).
+const DIRECT = new Map(EDGES.map(e => [`${e.from}→${e.to}`, e.id]));
+
+// Moves whose visual path is more than one hop (work travels through a node
+// that isn't its data destination — e.g. a merge passes through the human).
+const MULTI_HOP = {
+  'ready-for-human→done': ['handoff:human', 'merge:done'],
+};
+
+/**
+ * Ordered list of edge ids a ticket move should animate. Empty when the move
+ * isn't modeled (the caller falls back to a generic arc).
+ * @param {string} from @param {string} to @returns {string[]}
+ */
+export function pathEdgesForMove(from, to) {
+  const key = `${from}→${to}`;
+  if (MULTI_HOP[key]) return MULTI_HOP[key];
+  const direct = DIRECT.get(key);
+  return direct ? [direct] : [];
+}
