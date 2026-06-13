@@ -10,7 +10,7 @@ Every dispatchable agent declares its place in the pipeline via a `pipeline:` bl
 
 ```yaml
 pipeline:
-  stage: intake | routing | implementation | quality | review
+  stage: intake | routing | implementation | quality | review | improvement
   consumes: [<artifact>, ...]   # artifacts that trigger this agent
   produces: [<artifact>, ...]   # artifacts this agent emits
   dispatchable: true            # optional; false for utility agents
@@ -148,4 +148,5 @@ stateDiagram-v2
 
 - Every bug fix must leave Quality with at least one regression test (unit or E2E — spans both if logic + UI).
 - A PR can cycle through Review ↔ Routing any number of times via `feedback-responder` until the human owner approves.
+- The pipeline improves itself: `transcript-reviewer` (stage `improvement`) reads completed-run and session transcripts plus human interventions, logs compounding lessons, and files `improvement-finding`s that `agent-improver` turns into agent/rule/doc PRs — closing the Continuous-Improvement loop. `improvement-finding` has a single producer (transcript-reviewer) and a single consumer (agent-improver).
 - Only `feat:` / `fix:` / `perf:` merges trigger a release; other types ship without a version bump (per conventional-commits).

@@ -42,6 +42,7 @@
     "folder-structure-enforcer":      { "stage": "implementation", "requires": ["github"] },
     "technical-docs-manager":         { "stage": "implementation", "requires": ["github"] },
     "branch-updater":                 { "stage": "implementation", "requires": ["github"] },
+    "agent-improver":                 { "stage": "implementation", "requires": ["github"], "optional": ["linear"] },
     "tester":                         { "stage": "quality",        "requires": ["github"] },
     "e2e-test-quality":               { "stage": "quality",        "requires": ["github", "playwright"] },
     "e2e-test-runner":                { "stage": "quality",        "requires": ["playwright"] },
@@ -57,6 +58,7 @@
     "mock-contract-detector":         { "stage": "detector",       "requires": [] },
     "density-system-detector":        { "stage": "detector",       "requires": [] },
     "justification-detector":         { "stage": "detector",       "requires": ["github"] },
+    "transcript-reviewer":            { "stage": "improvement",    "requires": [], "optional": ["github", "linear"] },
     "glossary-maintainer":            { "stage": "utility",        "requires": ["github"] },
     "context-mapper":                 { "stage": "utility",        "requires": [] },
     "git-worktree-manager":           { "stage": "utility",        "requires": [] }
