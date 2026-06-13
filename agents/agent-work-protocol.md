@@ -60,7 +60,7 @@ Every comment, commit, or status update an agent posts must include an identity 
 fix: add ErrorBoundary to dashboard page
 
 [agent:dashboard-specialist]
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
 
 **In Linear issue comments** (when updating status or leaving notes):

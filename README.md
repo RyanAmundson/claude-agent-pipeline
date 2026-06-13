@@ -206,16 +206,17 @@ Tickets live as JSON files under `.pipeline/queue/<state>/<id>.json`. State tran
 
 ## Agents
 
-29 agents across these stages (see [`manifest.json`](./manifest.json) for the canonical list and dep tags):
+31 agents across these stages (see [`manifest.json`](./manifest.json) for the canonical list and dep tags):
 
 | Stage | Agents |
 |-------|--------|
 | **Intake** | scanner, ticket-creator |
 | **Routing** | ticket-reviewer, flex-worker, linear-issue-orchestrator |
-| **Implementation** | worker, declarative-refactor-specialist, folder-structure-enforcer, technical-docs-manager, branch-updater |
+| **Implementation** | worker, declarative-refactor-specialist, folder-structure-enforcer, technical-docs-manager, branch-updater, agent-improver |
 | **Quality** | tester, e2e-test-quality, e2e-test-runner, ci-triage, data-validator |
 | **Review** | code-reviewer, feedback-responder, cleanup |
 | **Detectors** (round-robin) | a11y, perf, security, pipeline-violation, mock-contract, density-system, justification |
+| **Improvement** | transcript-reviewer (reviews run/session transcripts → lessons + agent-def fixes via agent-improver) |
 | **Utilities** | glossary-maintainer, context-mapper, git-worktree-manager |
 | **Meta** | orchestrator |
 

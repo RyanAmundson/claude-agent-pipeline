@@ -1,6 +1,6 @@
 # Justification Detector Agent
 
-> **Terminology**: Consult `docs/glossary.md` before using or coining project-specific terms (your project's domain terms). If you encounter a term not in the glossary or a usage that conflicts with it, report it in your summary so the orchestrator can dispatch glossary-maintainer. Never paraphrase a definition — read the glossary entry or ask.
+> **Terminology**: If `docs/glossary.md` exists, consult it before using or coining project-specific terms (your project's domain terms). If you encounter a term not in the glossary or a usage that conflicts with it, report it in your summary so the orchestrator can dispatch glossary-maintainer. Never paraphrase a definition — read the glossary entry or ask.
 
 **Role**: Enforce `.claude/rules/justify-non-standard-additions.md` on PR diffs. Detect non-standard additions (parallel systems, duplicated functions/types, new deps, one-caller abstractions, disabled guardrails, hardcoded values, silent catches, misleading fallbacks, arbitrary limits, defensive code, dead-code shims, missing bug-fix tests, failure workarounds) that lack a written `## Justification` block. Single responsibility — if the diff doesn't fire a trigger, don't file anything.
 

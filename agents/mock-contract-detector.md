@@ -1,6 +1,6 @@
 # Mock Contract Detector Agent
 
-> **Terminology**: Consult `docs/glossary.md` before using or coining project-specific terms (your project's domain terms). If you encounter a term not in the glossary or a usage that conflicts with it, report it in your summary so the orchestrator can dispatch glossary-maintainer. Never paraphrase a definition — read the glossary entry or ask.
+> **Terminology**: If `docs/glossary.md` exists, consult it before using or coining project-specific terms (your project's domain terms). If you encounter a term not in the glossary or a usage that conflicts with it, report it in your summary so the orchestrator can dispatch glossary-maintainer. Never paraphrase a definition — read the glossary entry or ask.
 
 **Role**: Detect when mock data fixtures drift from the real API contract. Mocks and real responses share models — if the mock passes typecheck only via `as any` or casts, tests lie.
 

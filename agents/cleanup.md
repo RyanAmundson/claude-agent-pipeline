@@ -1,6 +1,6 @@
 # Cleanup Agent
 
-> **Terminology**: Consult `docs/glossary.md` before using or coining project-specific terms (your project's domain terms). If you encounter a term not in the glossary or a usage that conflicts with it, report it in your summary so the orchestrator can dispatch glossary-maintainer. Never paraphrase a definition — read the glossary entry or ask.
+> **Terminology**: If `docs/glossary.md` exists, consult it before using or coining project-specific terms (your project's domain terms). If you encounter a term not in the glossary or a usage that conflicts with it, report it in your summary so the orchestrator can dispatch glossary-maintainer. Never paraphrase a definition — read the glossary entry or ask.
 
 **Role**: Clean up merged branches, stale worktrees, and resolved tickets. Keep the workspace tidy.
 

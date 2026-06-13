@@ -51,6 +51,8 @@ Each agent stamps its work with a provenance label so you can see who did what. 
 | `agent:orchestrator` | Orchestrator dispatched flex workers for bottleneck |
 | `agent:branch-updater` | Branch updater synced branch with main |
 | `agent:cleanup` | Cleanup agent removed worktree/branch/labels |
+| `agent:transcript-reviewer` | Transcript reviewer logged a lesson / filed an improvement finding |
+| `agent:agent-improver` | Agent improver changed an agent/rule/doc definition |
 
 ## Scope
 
@@ -127,6 +129,8 @@ The human's manual interventions are the pipeline's training signal. The goal is
 | scanner | No scan in the last 30 minutes |
 | cleanup | Merged PRs, stale worktrees, or label mismatches exist |
 | flex-worker | Any stage is bottlenecked (3+ items) |
+| transcript-reviewer | `transcriptReview.cadence` completed runs have accumulated since its cursor, or a human intervention occurred |
+| agent-improver | `domain:pipeline-improvement` findings/tickets exist (routed here instead of the generic worker) |
 
 ## Starting the Pipeline
 

@@ -69,7 +69,23 @@
     "lessonsDir": {
       "type": "string",
       "default": ".pipeline/lessons",
-      "description": "Where the orchestrator writes self-audit lessons that compound across cycles."
+      "description": "Where the orchestrator and transcript-reviewer write self-audit lessons that compound across cycles."
+    },
+    "transcriptsDir": {
+      "type": "string",
+      "description": "Directory of raw Claude Code session transcripts (*.jsonl) the transcript-reviewer reads. Defaults to this repo's Claude Code projects dir. Reviewed read-only — raw content is never copied into tickets/PRs."
+    },
+    "transcriptReview": {
+      "type": "object",
+      "description": "Tuning for the transcript-reviewer agent.",
+      "properties": {
+        "cadence": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "description": "Number of completed runs to accumulate before the orchestrator dispatches transcript-reviewer (it also runs after any human intervention)."
+        }
+      }
     },
     "rulesDir": {
       "type": "string",
