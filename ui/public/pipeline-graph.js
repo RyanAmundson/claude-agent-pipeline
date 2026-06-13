@@ -106,3 +106,48 @@ export function pathFor(edge, nodes = NODES) {
   const r = n => (Number.isInteger(n) ? String(n) : n.toFixed(1));
   return `M ${r(a.x)} ${r(a.y)} Q ${r(cx)} ${r(cy)} ${r(b.x)} ${r(b.y)}`;
 }
+
+// ─── live-count model ──────────────────────────────────────────────────────
+// Tracks id → state so counts are derived (a content-change upsert can't
+// double-count, and a move is just a reassignment). `seen` lets the animator
+// tell a brand-new ticket (entry) from a content update.
+
+/** @param {*} snapshot @returns {{idState: Map<string,string>}} */
+export function seedModel(snapshot) {
+  const idState = new Map();
+  const byState = snapshot?.tickets?.byState || {};
+  for (const [state, list] of Object.entries(byState)) {
+    for (const t of list || []) idState.set(t.id, state);
+  }
+  return { idState };
+}
+
+export function hasTicket(model, id) {
+  return model.idState.has(id);
+}
+
+/** Apply one watcher event, returning a new model (does not mutate). */
+export function applyEvent(model, ev) {
+  const idState = new Map(model.idState);
+  if (ev.type === 'ticket.move') {
+    idState.set(ev.id, ev.to);
+  } else if (ev.type === 'ticket.upsert') {
+    const id = ev.ticket?.id ?? ev.id;
+    if (id != null) idState.set(id, ev.state);
+  } else if (ev.type === 'ticket.remove') {
+    idState.delete(ev.id);
+  }
+  return { idState };
+}
+
+/** Per-state counts for every state-bearing node (zero-filled). */
+export function countsOf(model) {
+  const counts = {};
+  for (const node of Object.values(NODES)) {
+    if (node.state) counts[node.state] = 0;
+  }
+  for (const state of model.idState.values()) {
+    if (state in counts) counts[state] += 1;
+  }
+  return counts;
+}

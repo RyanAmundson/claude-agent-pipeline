@@ -77,3 +77,49 @@ test('a non-zero bend pushes the control point off the chord', () => {
   const bowed = pathFor({ from: 'needs-review', to: 'needs-info', bend: 40 });
   assert.notEqual(straight, bowed);
 });
+
+import { seedModel, applyEvent, countsOf, hasTicket } from '../../ui/public/pipeline-graph.js';
+
+const SNAP = {
+  tickets: { byState: {
+    'needs-work': [{ id: 'A' }, { id: 'B' }],
+    'in-progress': [{ id: 'C' }],
+    'ready-for-human': [{ id: 'D' }],
+  } },
+};
+
+test('seedModel + countsOf reflect the snapshot', () => {
+  const counts = countsOf(seedModel(SNAP));
+  assert.equal(counts['needs-work'], 2);
+  assert.equal(counts['in-progress'], 1);
+  assert.equal(counts['ready-for-human'], 1);
+  assert.equal(counts['needs-triage'], 0);
+});
+
+test('a move decrements the source and increments the destination', () => {
+  let m = seedModel(SNAP);
+  m = applyEvent(m, { type: 'ticket.move', id: 'A', from: 'needs-work', to: 'in-progress' });
+  const counts = countsOf(m);
+  assert.equal(counts['needs-work'], 1);
+  assert.equal(counts['in-progress'], 2);
+});
+
+test('upsert of a new id adds it; re-upsert is idempotent', () => {
+  let m = seedModel(SNAP);
+  m = applyEvent(m, { type: 'ticket.upsert', state: 'needs-triage', ticket: { id: 'Z' } });
+  assert.equal(countsOf(m)['needs-triage'], 1);
+  m = applyEvent(m, { type: 'ticket.upsert', state: 'needs-triage', ticket: { id: 'Z' } });
+  assert.equal(countsOf(m)['needs-triage'], 1);
+});
+
+test('remove drops the id from its state', () => {
+  let m = seedModel(SNAP);
+  m = applyEvent(m, { type: 'ticket.remove', id: 'D', state: 'ready-for-human' });
+  assert.equal(countsOf(m)['ready-for-human'], 0);
+});
+
+test('hasTicket reports prior membership (for entry detection)', () => {
+  const m = seedModel(SNAP);
+  assert.equal(hasTicket(m, 'A'), true);
+  assert.equal(hasTicket(m, 'Z'), false);
+});
