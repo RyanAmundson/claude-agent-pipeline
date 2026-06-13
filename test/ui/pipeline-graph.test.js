@@ -58,3 +58,22 @@ test('entry move (scanner→triage) resolves to the entry spine edge', () => {
 test('an unmodeled move returns an empty path', () => {
   assert.deepEqual(pathEdgesForMove('done', 'in-progress'), []);
 });
+
+import { pathFor } from '../../ui/public/pipeline-graph.js';
+
+test('pathFor returns a quadratic bezier between node centers', () => {
+  const d = pathFor(EDGES.find(e => e.id === 'spine:review'));
+  // M <ax> <ay> Q <cx> <cy> <bx> <by>
+  assert.match(d, /^M 210 250 Q [\d.-]+ [\d.-]+ 340 250$/);
+});
+
+test('a zero-bend edge keeps the control point on the chord midpoint', () => {
+  const d = pathFor({ from: 'needs-triage', to: 'needs-review', bend: 0 });
+  assert.match(d, /^M 210 250 Q 275(\.0)? 250(\.0)? 340 250$/);
+});
+
+test('a non-zero bend pushes the control point off the chord', () => {
+  const straight = pathFor({ from: 'needs-review', to: 'needs-info', bend: 0 });
+  const bowed = pathFor({ from: 'needs-review', to: 'needs-info', bend: 40 });
+  assert.notEqual(straight, bowed);
+});

@@ -81,3 +81,28 @@ export function pathEdgesForMove(from, to) {
   const direct = DIRECT.get(key);
   return direct ? [direct] : [];
 }
+
+/**
+ * SVG path `d` for an edge: a quadratic bezier from the source node center to
+ * the target center, with the control point offset perpendicular to the chord
+ * by `edge.bend`. Pure string math (no DOM).
+ * @param {{from:string,to:string,bend?:number}} edge
+ * @param {Record<string,{x:number,y:number}>} nodes
+ * @returns {string}
+ */
+export function pathFor(edge, nodes = NODES) {
+  const a = nodes[edge.from];
+  const b = nodes[edge.to];
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const px = -dy / len; // perpendicular unit vector
+  const py = dx / len;
+  const bend = edge.bend || 0;
+  const cx = mx + px * bend;
+  const cy = my + py * bend;
+  const r = n => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+  return `M ${r(a.x)} ${r(a.y)} Q ${r(cx)} ${r(cy)} ${r(b.x)} ${r(b.y)}`;
+}
