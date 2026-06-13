@@ -5,7 +5,8 @@
 import {
   NODES, EDGES, VIEW, pathFor,
   seedModel, applyEvent, countsOf, hasTicket, pathEdgesForMove,
-  countsFromCycle, runningAgentsFromCycle, countSourceForCycle,
+  countsFromCycle, countSourceForCycle,
+  agentCountsByNode, runningAgentNames,
 } from './pipeline-graph.js';
 import { colorForAgent } from './colors.js';
 
@@ -72,12 +73,30 @@ function buildGraph() {
       ag.textContent = n.agent;
       g.append(ag);
     }
+    // Ticket backlog badge (top-right, accent).
     const countBg = el('circle', { class: 'pl-node-countbg', cx: 52, cy: -22, r: 9 });
     const countText = el('text', { class: 'pl-node-count', x: 52, y: -18.5 });
     g.append(countBg, countText);
-    nodeEls.set(id, { g, countText, countBg });
+    // Active-agent badge (bottom-right, ok-green) — only on the node where this
+    // agent actually works (its `agentHome`), so it reads as allocation vs the
+    // backlog the ticket badge shows.
+    let agentBg = null, agentText = null;
+    if (n.agent && n.agentHome !== false) {
+      agentBg = el('circle', { class: 'pl-node-agentbg', cx: 52, cy: 22, r: 9 });
+      agentText = el('text', { class: 'pl-node-agentcount', x: 52, y: 25.5 });
+      g.append(agentBg, agentText);
+    }
+    nodeEls.set(id, { g, countText, countBg, agentBg, agentText });
     nodeLayer.append(g);
   }
+
+  // Legend: distinguishes the two badges (tickets queued vs agents working).
+  const legend = el('g', { class: 'pl-legend', transform: 'translate(24,22)' });
+  const swatch = (cx, cls) => el('circle', { class: cls, cx, cy: 0, r: 6 });
+  const lbl = (x, t) => { const e = el('text', { class: 'pl-legend-label', x, y: 4 }); e.textContent = t; return e; };
+  legend.append(swatch(0, 'pl-node-countbg'), lbl(10, 'tickets queued'),
+                swatch(120, 'pl-node-agentbg'), lbl(130, 'agents working'));
+  nodeLayer.append(legend);
 
   svg.append(edgeLayer, tokenLayer, nodeLayer);
   return true;
@@ -88,18 +107,6 @@ function currentCounts() {
   return countSourceForCycle(latestCycle) === 'cycle'
     ? countsFromCycle(latestCycle)
     : countsOf(model);
-}
-
-// Agents to pulse: filesystem run records (from the snapshot) ∪ the cycle
-// report's running list (the only running signal on Linear/GitHub, and a
-// supplement for in-session Task subagents on filesystem).
-function runningAgentSet() {
-  const set = new Set();
-  for (const a of lastSnapshot?.agents || []) {
-    if ((a.activity?.runs || []).length) set.add(a.name);
-  }
-  for (const name of runningAgentsFromCycle(latestCycle)) set.add(name);
-  return set;
 }
 
 function renderCounts() {
@@ -113,18 +120,29 @@ function renderCounts() {
   }
 }
 
-function renderRunning() {
-  const running = runningAgentSet();
+// How many agents are working at each node, and pulse those nodes. The running
+// list comes from the cycle report when present (the orchestrator's
+// authoritative dispatch list, and the only signal on Linear/GitHub), else from
+// filesystem run records — see runningAgentNames().
+function renderAgents() {
+  const byNode = agentCountsByNode(runningAgentNames(lastSnapshot, latestCycle));
   for (const [id, n] of Object.entries(NODES)) {
-    nodeEls.get(id).g.classList.toggle('running', !!n.agent && running.has(n.agent));
+    const els = nodeEls.get(id);
+    const c = (n.agent && n.agentHome !== false) ? (byNode[id] || 0) : 0;
+    if (els.agentText) els.agentText.textContent = String(c);
+    els.g.classList.toggle('has-agents', c > 0);
+    els.g.classList.toggle('running', c > 0);
   }
 }
 
 function updateStatus() {
   if (!statusEl) return;
-  const total = Object.values(currentCounts()).reduce((a, b) => a + b, 0);
+  const tickets = Object.values(currentCounts()).reduce((a, b) => a + b, 0);
+  const agents = Object.values(agentCountsByNode(runningAgentNames(lastSnapshot, latestCycle)))
+    .reduce((a, b) => a + b, 0);
   const via = countSourceForCycle(latestCycle) === 'cycle' ? ` · ${latestCycle.backend}` : '';
-  statusEl.textContent = `${total} ticket${total === 1 ? '' : 's'} in flight${via}`;
+  statusEl.textContent =
+    `${tickets} ticket${tickets === 1 ? '' : 's'} · ${agents} agent${agents === 1 ? '' : 's'} working${via}`;
 }
 
 // Briefly highlight every state node whose count changed between two snapshots
@@ -141,7 +159,7 @@ function applySnapshot(snapshot) {
   lastSnapshot = snapshot;
   if (snapshot.cycle) latestCycle = snapshot.cycle;  // append-only; never clear
   renderCounts();
-  renderRunning();
+  renderAgents();
   updateStatus();
 }
 
@@ -227,7 +245,7 @@ function handleEvent(ev) {
     const before = currentCounts();
     latestCycle = ev.cycle;
     renderCounts();
-    renderRunning();
+    renderAgents();
     updateStatus();
     if (countSourceForCycle(latestCycle) === 'cycle') flashChangedNodes(before, currentCounts());
     return;

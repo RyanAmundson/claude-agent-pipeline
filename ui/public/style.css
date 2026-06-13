@@ -247,10 +247,20 @@ body:not([data-view="log"]) .log-only { display: none; }
 .pl-node-countbg { fill: var(--accent); }
 .pl-node.empty .pl-node-countbg { display: none; }
 .pl-node.empty .pl-node-count { display: none; }
+/* agent-allocation badge (green, bottom-right) — shown only while agents work here */
+.pl-node-agentcount {
+  fill: var(--bg); font-size: 11px; font-weight: 700; text-anchor: middle;
+}
+.pl-node-agentbg { fill: var(--ok); }
+.pl-node:not(.has-agents) .pl-node-agentbg { display: none; }
+.pl-node:not(.has-agents) .pl-node-agentcount { display: none; }
 .pl-node.running .pl-node-box {
   stroke: var(--ok); stroke-width: 2; animation: pulse 2s ease-in-out infinite;
 }
 .pl-node.flash .pl-node-box { stroke: var(--text); stroke-width: 2; }
+
+/* legend: which badge is which */
+.pl-legend-label { fill: var(--dim); font-size: 10px; }
 
 /* tokens */
 .pl-token { fill: var(--accent); stroke: var(--bg); stroke-width: 0.5; }
