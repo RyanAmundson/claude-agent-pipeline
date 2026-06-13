@@ -27,6 +27,14 @@ export interface TicketSource {
   [k: string]: unknown;
 }
 
+/** One append-only review comment on a ticket (filesystem backend). */
+export interface TicketComment {
+  author: string;
+  verdict?: 'pass' | 'fail' | null;
+  body: string;
+  at: string;
+}
+
 export interface Ticket {
   id: string;
   title?: string;
@@ -35,6 +43,11 @@ export interface Ticket {
   labels?: string[];
   source?: TicketSource;
   pr_url?: string | null;
+  /** Filesystem-backend fields (CAP 0.3.0). */
+  branch?: string | null;
+  base?: string | null;
+  worktree?: string | null;
+  comments?: TicketComment[];
   stale_count?: number;
   created_at?: string;
   updated_at?: string;
