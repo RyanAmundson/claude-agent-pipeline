@@ -6,12 +6,15 @@ export const VIEW = { w: 1120, h: 560 };
 
 // Each node has a center (x, y). `kind` drives styling. `agent` is the owning
 // agent shown beneath the node. `state` (when present) is the queue state whose
-// live ticket count the node displays.
+// live ticket count the node displays. `agentHome` (default true) marks the node
+// where this agent actively works, so running-agent counts show there and not on
+// the backlog/park it pulls from — e.g. workers count at `in-progress`, not the
+// `needs-work` queue; the reviewer at `needs-review`, not the `needs-info` park.
 export const NODES = {
   scanner:             { label: 'scan',        agent: 'scanner',            x: 70,   y: 250, kind: 'entry' },
   'needs-triage':      { label: 'triage',      agent: 'ticket-creator',     x: 210,  y: 250, kind: 'state', state: 'needs-triage' },
   'needs-review':      { label: 'review',      agent: 'ticket-reviewer',    x: 340,  y: 250, kind: 'state', state: 'needs-review' },
-  'needs-work':        { label: 'work',        agent: 'worker',             x: 470,  y: 250, kind: 'state', state: 'needs-work' },
+  'needs-work':        { label: 'work',        agent: 'worker',             x: 470,  y: 250, kind: 'state', state: 'needs-work', agentHome: false },
   'in-progress':       { label: 'in-progress', agent: 'worker',             x: 600,  y: 250, kind: 'state', state: 'in-progress' },
   'needs-test-review': { label: 'test',        agent: 'tester',             x: 730,  y: 250, kind: 'state', state: 'needs-test-review' },
   'needs-code-review': { label: 'code-review', agent: 'code-reviewer',      x: 870,  y: 250, kind: 'state', state: 'needs-code-review' },
@@ -19,7 +22,7 @@ export const NODES = {
   human:               { label: '\u{1F464} human', agent: null,             x: 1010, y: 110, kind: 'human' },
   done:                { label: 'done',        agent: 'cleanup',            x: 1010, y: 410, kind: 'exit',  state: 'done' },
   'needs-feedback':    { label: 'feedback',    agent: 'feedback-responder', x: 800,  y: 410, kind: 'state', state: 'needs-feedback' },
-  'needs-info':        { label: 'needs-info',  agent: 'ticket-reviewer',    x: 340,  y: 410, kind: 'park',  state: 'needs-info' },
+  'needs-info':        { label: 'needs-info',  agent: 'ticket-reviewer',    x: 340,  y: 410, kind: 'park',  state: 'needs-info', agentHome: false },
   obsolete:            { label: 'obsolete',    agent: 'relevance-checker',  x: 470,  y: 410, kind: 'exit',  state: 'obsolete' },
   // chrome: off-path agents (no state → no count badge). orchestrator pulses
   // when an orchestrator run is active; the feeders flow findings into triage.
@@ -188,4 +191,48 @@ export function runningAgentsFromCycle(cycle) {
 export function countSourceForCycle(cycle) {
   const backend = cycle?.backend;
   return backend && backend !== 'filesystem' ? 'cycle' : 'model';
+}
+
+// ─── per-node agent allocation ──────────────────────────────────────────────
+// How many agents are working at each node, alongside the ticket backlog — the
+// orchestrator dispatches agents by back-pressure, so this makes allocation vs
+// queue depth visible at a glance.
+
+/** Agent name → the single node id where its running instances are shown. */
+export function agentHomeNodes() {
+  const map = {};
+  for (const [id, n] of Object.entries(NODES)) {
+    if (n.agent && n.agentHome !== false) map[n.agent] = id;
+  }
+  return map;
+}
+
+/** Array of running agent names (repeats = instances) → { nodeId: count }. */
+export function agentCountsByNode(names) {
+  const home = agentHomeNodes();
+  const counts = {};
+  for (const name of names || []) {
+    const node = home[name];
+    if (node) counts[node] = (counts[node] || 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * The running-agent instances to display, as a flat array of agent names. Uses
+ * the cycle report's `running` list when present (the orchestrator's
+ * authoritative dispatch list — the only signal on Linear/GitHub and the
+ * superset on filesystem), else falls back to filesystem run records. Never
+ * unions the two, so an agent can't be double-counted.
+ */
+export function runningAgentNames(snapshot, cycle) {
+  if (cycle && Array.isArray(cycle.running) && cycle.running.length) {
+    return cycle.running.filter(r => r && typeof r.agent === 'string').map(r => r.agent);
+  }
+  const names = [];
+  for (const a of snapshot?.agents || []) {
+    const k = (a.activity?.runs || []).length;
+    for (let i = 0; i < k; i++) names.push(a.name);
+  }
+  return names;
 }

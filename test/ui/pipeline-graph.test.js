@@ -159,3 +159,55 @@ test('countSourceForCycle: filesystem→model, linear/github→cycle, none→mod
   assert.equal(countSourceForCycle({ backend: 'github' }), 'cycle');
   assert.equal(countSourceForCycle(null), 'model');
 });
+
+import {
+  agentHomeNodes, agentCountsByNode, runningAgentNames,
+} from '../../ui/public/pipeline-graph.js';
+
+// ─── per-node agent allocation (back-pressure view) ─────────────────────────
+// Each running agent counts at the node where it actively works, so a node can
+// show both its ticket backlog and how many agents are on it.
+
+test('agentHomeNodes maps each agent to its single work-home node', () => {
+  const home = agentHomeNodes();
+  assert.equal(home['worker'], 'in-progress');        // not needs-work (backlog)
+  assert.equal(home['ticket-reviewer'], 'needs-review'); // not needs-info (park)
+  assert.equal(home['code-reviewer'], 'needs-code-review');
+  assert.equal(home['tester'], 'needs-test-review');
+  assert.equal(home['cleanup'], 'done');
+  assert.equal(home['relevance-checker'], 'obsolete');
+  assert.equal(home['orchestrator'], 'orchestrator');
+});
+
+test('agentCountsByNode tallies running instances onto home nodes', () => {
+  const c = agentCountsByNode(['worker', 'worker', 'code-reviewer', 'tester']);
+  assert.equal(c['in-progress'], 2);     // two workers
+  assert.equal(c['needs-code-review'], 1);
+  assert.equal(c['needs-test-review'], 1);
+  assert.equal(c['needs-work'], undefined);   // backlog node never gets an agent count
+});
+
+test('agentCountsByNode ignores agents with no modeled node', () => {
+  const c = agentCountsByNode(['ghost-agent', 'worker']);
+  assert.equal(c['in-progress'], 1);
+  assert.equal('ghost-agent' in c, false);
+});
+
+test('runningAgentNames prefers cycle.running when present (Linear/GitHub)', () => {
+  const names = runningAgentNames(
+    { agents: [{ name: 'worker', activity: { runs: [{ runId: 'r' }] } }] },
+    { running: [{ agent: 'code-reviewer' }, { agent: 'code-reviewer' }] },
+  );
+  assert.deepEqual(names, ['code-reviewer', 'code-reviewer']);  // cycle wins, no double count
+});
+
+test('runningAgentNames falls back to filesystem run records', () => {
+  const names = runningAgentNames(
+    { agents: [
+      { name: 'worker', activity: { runs: [{ runId: 'a' }, { runId: 'b' }] } },
+      { name: 'tester', activity: { runs: [] } },
+    ] },
+    null,
+  );
+  assert.deepEqual(names.sort(), ['worker', 'worker']);
+});
