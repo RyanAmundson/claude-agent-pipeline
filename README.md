@@ -152,7 +152,7 @@ Full reference: [`docs/API.md`](./docs/API.md). Types: [`api/index.d.ts`](./api/
 
 A self-contained demo script that exercises the full dispatch / query / follow / kill loop lives at [`scripts/demo-run-loop.sh`](./scripts/demo-run-loop.sh).
 
-The browser dashboard (`agent-pipeline ui`) has two tabs: **live log** — streaming run events, color-coded per agent — and **agents** — a reference list of every agent grouped by pipeline stage, showing what each one does (its role) and the bounds it works within (its scope), plus input/output and required deps.
+The browser dashboard (`agent-pipeline ui`) opens on the **pipeline** tab — an animated graph of the whole work lifecycle: queue states as nodes, every transition as an edge (including the review-fail loop, the human handoff and its re-entries, parking, stale re-queues, and the reserved `obsolete` exit), and tickets as tokens that flow along edges as they move. Per-node counts and a green pulse on the running agent stay live: on the filesystem backend they're driven by `ticket.move` events; on the Linear/GitHub backend (no queue to watch) they're driven by the orchestrator's `cycle.report`. Two more tabs are one click away: **live log** — streaming run events, color-coded per agent — and **agents** — a reference list of every agent grouped by pipeline stage, showing what each one does (its role) and the bounds it works within (its scope), plus input/output and required deps.
 
 ## First-run setup
 

@@ -6,11 +6,12 @@
 <title>agent-pipeline — dashboard</title>
 <link rel="stylesheet" href="/style.css">
 </head>
-<body data-view="log">
+<body data-view="pipeline">
 <header>
   <h1>agent-pipeline <span class="dim">live</span></h1>
   <nav class="tabs" role="tablist">
-    <button class="tab" data-tab="log" role="tab" aria-selected="true">live log</button>
+    <button class="tab" data-tab="pipeline" role="tab" aria-selected="true">pipeline</button>
+    <button class="tab" data-tab="log" role="tab" aria-selected="false">live log</button>
     <button class="tab" data-tab="agents" role="tab" aria-selected="false">agents</button>
   </nav>
   <div class="controls">
@@ -22,6 +23,12 @@
 </header>
 <div id="cycle" class="cycle-strip" aria-live="polite" hidden></div>
 <main>
+  <section id="pipeline" data-panel="pipeline" aria-live="polite">
+    <svg id="pipeline-graph" viewBox="0 0 1120 560"
+         preserveAspectRatio="xMidYMid meet" role="img"
+         aria-label="agent pipeline flow"></svg>
+    <p id="pipeline-status" class="dim">loading…</p>
+  </section>
   <pre id="log" aria-live="polite" data-panel="log"></pre>
   <section id="agents" data-panel="agents" aria-live="polite">
     <div class="agents-intro">

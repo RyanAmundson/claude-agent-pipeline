@@ -1,3 +1,5 @@
+import { initPipeline } from './pipeline.js';
+
 // Live log viewer for agent-pipeline. Subscribes to /api/v1/log (SSE) and
 // renders each RunEvent as a line. Color-coded per agent so concurrent runs
 // are easy to tell apart.
@@ -525,6 +527,7 @@ function selectTab(view) {
   document.body.dataset.view = view;
   for (const t of tabs) t.setAttribute('aria-selected', String(t.dataset.tab === view));
   if (view === 'agents') renderAgents();
+  if (view === 'pipeline') initPipeline();
 }
 for (const t of tabs) {
   t.addEventListener('click', () => selectTab(t.dataset.tab));
@@ -532,3 +535,6 @@ for (const t of tabs) {
 
 loadSnapshot().then(connect);
 connectEvents();
+
+// Default view is pipeline (set in index.html); initialize it on load.
+selectTab(document.body.dataset.view || 'pipeline');
