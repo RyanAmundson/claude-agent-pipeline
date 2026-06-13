@@ -23,6 +23,21 @@ The orchestrator dispatches this agent when any of the following happens:
 
 ## Process
 
+### 0. Ensure the glossary exists
+
+Before anything else, check for `docs/glossary.md` in the target repo. **If it does not exist, create it** with a header and an empty entries section so every agent's `> **Terminology**:` check has a file to read:
+
+```markdown
+# Glossary
+
+Canonical definitions for ${REPO_NAME} domain terms — one term, one definition.
+Maintained by `agent:glossary-maintainer`.
+
+<!-- entries below -->
+```
+
+A missing glossary is itself the first work item: bootstrapping it (even empty) unblocks the terminology contract the rest of the pipeline depends on. Commit it in the same `chore:` PR as the first real entry, or on its own if there is no term to add yet.
+
 ### 1. Classify the term
 
 For each candidate term, decide one of:
