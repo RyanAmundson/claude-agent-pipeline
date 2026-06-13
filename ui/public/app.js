@@ -218,7 +218,132 @@ function agentCard(a) {
 let agentsBuilt = false;
 let latestSnap = null;
 
+// ─── Live cycle strip ────────────────────────────────────────────────────
+// The latest orchestrator cycle (snapshot.cycle on load, then cycle.report
+// events). On non-filesystem backends (Linear/GitHub) this is the ONLY source
+// of queue-state counts and of which agents are running — the watcher cannot
+// see label state or in-session (Task-dispatched) subagents, so the orchestrator
+// self-reports them each cycle.
+
+let latestCycle = null;
+let latestCycleDeltas = null;
+const cycleEl = document.getElementById('cycle');
+
+// Pipeline-order states for the count chips (mirrors api STATES).
+const QUEUE_STATES = [
+  'needs-triage', 'needs-review', 'needs-work', 'in-progress',
+  'needs-test-review', 'needs-code-review', 'needs-feedback',
+  'ready-for-human', 'done', 'needs-info',
+];
+
+// agent name → { item, minutes } for agents the latest cycle reports as running.
+function cycleRunningMap() {
+  const m = new Map();
+  for (const r of latestCycle?.running || []) {
+    if (r && typeof r.agent === 'string') m.set(r.agent, r);
+  }
+  return m;
+}
+
+function fmtCountdown(c) {
+  if (!c || c.nextCheckSeconds == null || !c.at) return '';
+  const due = new Date(c.at).getTime() + c.nextCheckSeconds * 1000;
+  let s = Math.round((due - Date.now()) / 1000);
+  if (!Number.isFinite(s)) return '';
+  if (s <= 0) return 'check due';
+  const m = Math.floor(s / 60); s %= 60;
+  return m ? `next check ${m}m${String(s).padStart(2, '0')}s` : `next check ${s}s`;
+}
+
+function deltasBetween(prev, cur) {
+  if (!prev) return null;
+  const out = {};
+  for (const k of new Set([...Object.keys(prev), ...Object.keys(cur || {})])) {
+    out[k] = (cur?.[k] || 0) - (prev[k] || 0);
+  }
+  return out;
+}
+
+function renderCycle() {
+  if (!cycleEl) return;
+  const c = latestCycle;
+  if (!c) { cycleEl.hidden = true; return; }
+  cycleEl.hidden = false;
+  cycleEl.textContent = '';
+
+  const head = document.createElement('span');
+  head.className = 'cycle-head';
+  head.textContent = `cycle ${c.cycle}`;
+  cycleEl.append(head);
+  if (c.backend) {
+    const b = document.createElement('span');
+    b.className = 'cycle-backend dim';
+    b.textContent = c.backend;
+    cycleEl.append(b);
+  }
+  const cd = document.createElement('span');
+  cd.className = 'cycle-countdown dim';
+  cd.id = 'cycle-countdown';
+  cd.textContent = fmtCountdown(c);
+  cycleEl.append(cd);
+
+  // Queue-state counts with deltas vs the prior cycle. For Linear/GitHub this
+  // is the only place real ticket-state counts surface on the dashboard.
+  const counts = c.counts || {};
+  const shown = QUEUE_STATES.filter(s => (counts[s] || 0) !== 0 || (latestCycleDeltas?.[s] || 0) !== 0);
+  if (shown.length) {
+    const wrap = document.createElement('span');
+    wrap.className = 'cycle-counts';
+    for (const s of shown) {
+      const chip = document.createElement('span');
+      chip.className = 'chip' + (s === 'ready-for-human' && (counts[s] || 0) > 0 ? ' awaiting' : '');
+      const label = document.createElement('span'); label.className = 'k'; label.textContent = s;
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = ` ${counts[s] || 0}`;
+      chip.append(label, n);
+      const d = latestCycleDeltas?.[s] || 0;
+      if (d) {
+        const ds = document.createElement('span');
+        ds.className = 'd ' + (d > 0 ? 'up' : 'down');
+        ds.textContent = d > 0 ? `▲${d}` : `▼${-d}`;
+        chip.append(ds);
+      }
+      wrap.append(chip);
+    }
+    cycleEl.append(wrap);
+  }
+
+  // Running agents and what each is working on (agent · item · minutes).
+  const running = c.running || [];
+  if (running.length) {
+    const wrap = document.createElement('span');
+    wrap.className = 'cycle-running';
+    const lead = document.createElement('span'); lead.className = 'lead'; lead.textContent = '▶ running';
+    wrap.append(lead);
+    for (const r of running) {
+      const t = document.createElement('span');
+      t.className = 'run-tag';
+      const item = r.item ? ` · ${r.item}` : '';
+      const mins = r.minutes != null ? ` ${r.minutes}m` : '';
+      t.textContent = `${r.agent}${item}${mins}`;
+      wrap.append(t);
+    }
+    cycleEl.append(wrap);
+  }
+
+  // Awaiting human.
+  const awaiting = c.awaiting || [];
+  if (awaiting.length) {
+    const a = document.createElement('span');
+    a.className = 'cycle-awaiting';
+    const ids = awaiting.slice(0, 6).join(', ');
+    const more = awaiting.length > 6 ? ` +${awaiting.length - 6}` : '';
+    a.textContent = `⚠ awaiting you: ${ids}${more}`;
+    cycleEl.append(a);
+  }
+}
+
 function updateAgentStatuses(snap) {
+  const cycRun = cycleRunningMap();
   let running = 0;
   for (const a of snap.agents || []) {
     const els = statusEls.get(a.name);
@@ -237,6 +362,16 @@ function updateAgentStatuses(snap) {
         r.lastActivity || '',
       ].filter(Boolean);
       els.meta.textContent = bits.join(' · ');
+    } else if (cycRun.has(a.name)) {
+      // Dispatched in-session this cycle (Task subagent — no run record), so the
+      // orchestrator's cycle report is the only signal that it's active.
+      running++;
+      const r = cycRun.get(a.name);
+      els.card.classList.add('running');
+      els.badge.className = 'badge running';
+      els.badge.textContent = '● running';
+      const bits = [r.item || '', r.minutes != null ? `${r.minutes}m` : ''].filter(Boolean);
+      els.meta.textContent = bits.length ? `this cycle · ${bits.join(' · ')}` : 'this cycle';
     } else {
       els.card.classList.remove('running');
       els.badge.className = 'badge idle';
@@ -326,11 +461,28 @@ let refetchTimer = null;
 
 function onSnapshot(snap) {
   latestSnap = snap;
+  // Cycles are append-only — once we have one, a later null snapshot (a race on
+  // refetch) must not clear the strip.
+  if (snap.cycle) {
+    latestCycle = snap.cycle;
+    latestCycleDeltas = snap.cycleDeltas || null;
+  }
   for (const run of [...(snap.runs?.active || []), ...(snap.runs?.completed || [])]) {
     runAgents.set(run.runId, run.agent);
   }
+  renderCycle();
   if (agentsBuilt) updateAgentStatuses(snap);
   else if (document.body.dataset.view === 'agents') renderAgents();
+}
+
+function onCycleReport(cycle) {
+  const prevCounts = latestCycle?.counts || null;
+  latestCycle = cycle;
+  latestCycleDeltas = deltasBetween(prevCounts, cycle.counts || {});
+  renderCycle();
+  // Relight agent cards from the new cycle's running list (no snapshot refetch
+  // needed — the event already carries everything the strip and cards show).
+  if (agentsBuilt && latestSnap) updateAgentStatuses(latestSnap);
 }
 
 function connectEvents() {
@@ -339,6 +491,7 @@ function connectEvents() {
   esEvents.onmessage = ev => {
     let data; try { data = JSON.parse(ev.data); } catch { return; }
     if (data.type === 'snapshot') return onSnapshot(data.data);
+    if (data.type === 'cycle.report') return onCycleReport(data.cycle);
     if (refetchTimer) return;
     refetchTimer = setTimeout(async () => {
       refetchTimer = null;
@@ -351,6 +504,13 @@ function connectEvents() {
     setTimeout(connectEvents, 3000);
   };
 }
+
+// Tick the cycle countdown every second (cheap — text-only update).
+setInterval(() => {
+  if (!latestCycle) return;
+  const el = document.getElementById('cycle-countdown');
+  if (el) el.textContent = fmtCountdown(latestCycle);
+}, 1000);
 
 // Keep elapsed-time readouts on running agents ticking between events.
 setInterval(() => {

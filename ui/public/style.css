@@ -173,3 +173,33 @@ body[data-view="agents"] [data-panel="log"]    { display: none; }
   padding: 0 4px; border-radius: 3px; font-size: 0.92em;
 }
 .agents-empty { color: var(--err); }
+
+/* ─── live cycle strip ───────────────────────────────────────────────── */
+.cycle-strip {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px;
+  padding: 7px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.cycle-strip[hidden] { display: none; }
+.cycle-head { color: var(--accent); font-weight: 600; }
+.cycle-counts { display: flex; flex-wrap: wrap; gap: 6px; }
+.cycle-counts .chip {
+  border: 1px solid var(--line); border-radius: 3px;
+  padding: 1px 7px; color: var(--text); white-space: nowrap;
+}
+.cycle-counts .chip .k { color: var(--dim); }
+.cycle-counts .chip .d.up { color: var(--ok); margin-left: 4px; }
+.cycle-counts .chip .d.down { color: var(--err); margin-left: 4px; }
+.cycle-counts .chip.awaiting { color: var(--warn); border-color: rgba(224, 175, 104, 0.4); }
+.cycle-counts .chip.awaiting .k { color: var(--warn); }
+.cycle-running { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cycle-running .lead { color: var(--ok); }
+.cycle-running .run-tag {
+  border: 1px solid rgba(158, 206, 106, 0.4);
+  background: rgba(158, 206, 106, 0.08);
+  border-radius: 3px; padding: 1px 7px; color: var(--ok); white-space: nowrap;
+  animation: pulse 2s ease-in-out infinite;
+}
+.cycle-awaiting { color: var(--warn); margin-left: auto; }

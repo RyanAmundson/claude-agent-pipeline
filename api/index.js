@@ -11,7 +11,7 @@ import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { diffRunIndexes, ensureRunsDirs, getRun, getRunEvents, indexRuns, listRuns, reapOrphanedRuns, runsRoot, RUN_STATES } from './runs.js';
-import { readCycleLines, cyclesFileSize } from './cycles.js';
+import { readCycleLines, readCycleTail, computeDeltas, cyclesFileSize } from './cycles.js';
 
 export { listRuns, getRun, getRunEvents, reapOrphanedRuns, RUN_STATES };
 
@@ -123,6 +123,15 @@ export function readSnapshot(opts) {
 
   const liveRuns = listRuns({ target });
 
+  // Latest orchestrator cycle (backend-neutral telemetry). On non-filesystem
+  // backends this is the ONLY source of queue-state counts and of which agents
+  // are running — the orchestrator self-reports them, since the watcher cannot
+  // see Linear/GitHub label state or in-session (Task-dispatched) subagents.
+  const { entries: cycleTail } = readCycleTail(target, 2);
+  const cycle = cycleTail.length ? cycleTail[cycleTail.length - 1] : null;
+  const cyclePrev = cycleTail.length > 1 ? cycleTail[cycleTail.length - 2] : null;
+  const cycleDeltas = cycle && cyclePrev ? computeDeltas(cyclePrev.counts, cycle.counts) : null;
+
   // Agents — union of manifest entries and definition files
   const agents = [];
   const seen = new Set();
@@ -152,6 +161,8 @@ export function readSnapshot(opts) {
       completed: liveRuns.completed,
       activeCount: liveRuns.active.length,
     },
+    cycle,
+    cycleDeltas,
   };
 }
 

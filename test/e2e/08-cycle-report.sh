@@ -129,5 +129,27 @@ assert_contains "$STDIN_OUT" "self-healing: PR #570's branch deleted" "stdin pay
 STDIN_NOTE=$(tail -1 "$CY" | jq -r '.notes[0]')
 assert_eq "$STDIN_NOTE" "self-healing: PR #570's branch deleted" "stdin payload: note persisted correctly in cycles.jsonl"
 
+# ── 10) readSnapshot() surfaces the latest cycle (browser-dashboard contract) ─
+# The UI reads snapshot.cycle / .cycleDeltas to render the live cycle strip and,
+# on non-filesystem backends, to know which agents are running (the watcher
+# cannot see Linear label state or in-session Task subagents).
+SWORK="$(mktemp -d -t ap-cycle-snap)"
+mkdir -p "$SWORK/.pipeline"
+cat > "$SWORK/.pipeline/config.json" <<'JSON'
+{ "backend": "linear" }
+JSON
+$AP cycle report --target "$SWORK" \
+  --data '{"counts":{"needs-work":3},"running":[{"agent":"code-reviewer","item":"#1097","minutes":6}],"nextCheckSeconds":270}' >/dev/null
+$AP cycle report --target "$SWORK" \
+  --data '{"counts":{"needs-work":2},"running":[{"agent":"security-detector","item":"scan"}],"nextCheckSeconds":270}' >/dev/null
+SNAP=$(node --input-type=module \
+  -e 'const {readSnapshot}=await import(process.argv[1]); process.stdout.write(JSON.stringify(readSnapshot({target:process.argv[2]})))' \
+  "file://$REPO_ROOT/api/index.js" "$SWORK")
+assert_eq "$(echo "$SNAP" | jq -r '.cycle.cycle')" "2" "snapshot.cycle is the latest cycle"
+assert_eq "$(echo "$SNAP" | jq -r '.cycle.running[0].agent')" "security-detector" "snapshot.cycle.running carries the active agent"
+assert_eq "$(echo "$SNAP" | jq -r '.cycle.running[0].item')" "scan" "snapshot.cycle.running carries what it's doing"
+assert_eq "$(echo "$SNAP" | jq -r '.cycleDeltas["needs-work"]')" "-1" "snapshot.cycleDeltas computed vs prior cycle"
+rm -rf "$SWORK"
+
 echo
 echo "08-cycle-report: all assertions passed"

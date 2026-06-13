@@ -93,6 +93,15 @@ export interface Snapshot {
     completed: Run[];
     activeCount: number;
   };
+  /**
+   * The latest orchestrator cycle (last line of `cycles.jsonl`), or null if none.
+   * On non-filesystem backends this carries the queue-state `counts` and the
+   * `running` agents the watcher cannot otherwise see. Updated live by
+   * `cycle.report` watcher events.
+   */
+  cycle: CycleEntry | null;
+  /** Per-state deltas of `cycle.counts` vs the prior cycle, or null. */
+  cycleDeltas: Record<string, number> | null;
 }
 
 // ─── runs ──────────────────────────────────────────────────────────────────
