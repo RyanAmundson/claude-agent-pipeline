@@ -17,7 +17,8 @@ Tickets are JSON files. State is encoded by which subdirectory the file lives in
 ├── needs-feedback/   # review feedback to address
 ├── ready-for-human/  # all automated checks passed
 ├── done/             # merged and cleaned up
-└── needs-info/       # parked, missing detail
+├── needs-info/       # parked, missing detail
+└── obsolete/         # retired as no longer relevant (auto-created on first use)
 ```
 
 State transitions are filesystem moves. `mv` within the same filesystem is atomic — exactly one caller wins.
@@ -106,6 +107,28 @@ queue-stale.sh --max-age-hours 4 --dry-run
 ```
 
 The cleanup agent runs this periodically.
+
+### `queue-relevance-eligible.sh [--ticket-stale-hours N] [--pr-stale-hours N] [--json]`
+
+List queue items the relevance-checker should judge — stale (past the per-state
+mtime threshold), not yet judged (`relevance_checked_at` absent or itself stale),
+not already flagged (`relevance_review`), and not referenced by a recent commit.
+Output is `<id>\t<state>` lines, or a JSON array with `--json`.
+
+```bash
+queue-relevance-eligible.sh --ticket-stale-hours 24 --pr-stale-hours 48 --json
+```
+
+### `queue-relevance-resolve.sh <id> --verdict relevant|obsolete --confidence high|medium|low`
+
+Route a recorded relevance verdict: `relevant` → keep (stamp only); `obsolete` at
+or above `--auto-resolve-confidence` (default `high`) → move to `obsolete/`;
+`obsolete` below it → set `relevance_review=true` and leave in place. Always stamps
+`relevance_checked_at` for idempotence. Composes `queue-update.sh` + `queue-claim.sh`.
+
+```bash
+queue-relevance-resolve.sh TKT-001 --verdict obsolete --confidence high
+```
 
 ### `queue-event.sh <id> <event-type> [--by <agent>] [key=value ...]`
 

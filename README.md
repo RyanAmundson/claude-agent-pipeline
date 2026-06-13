@@ -185,6 +185,20 @@ Per-project config lives at `.pipeline/config.json`. See [`config.schema.json`](
 
 For projects that route to per-feature specialists, optionally add `.pipeline/routing.json` (used by `linear-issue-orchestrator`).
 
+### Relevance checking (optional — absent ⇒ off)
+
+Tuning for the relevance-checker agent, which retires stale tickets/PRs the world has moved past:
+
+```jsonc
+"relevance": {
+  "enabled": true,
+  "ticketStaleHours": 24,          // needs-work age before a ticket is eligible
+  "prStaleHours": 48,              // ready-for-human age before an item is eligible
+  "autoResolveConfidence": "high", // confidence at which obsolete items auto-retire
+  "autoClosePRs": true             // GitHub: gh pr close on high-confidence-obsolete PRs
+}
+```
+
 ## Backends
 
 ### Linear (recommended)
@@ -206,12 +220,12 @@ Tickets live as JSON files under `.pipeline/queue/<state>/<id>.json`. State tran
 
 ## Agents
 
-33 agents across these stages (see [`manifest.json`](./manifest.json) for the canonical list and dep tags):
+34 agents across these stages (see [`manifest.json`](./manifest.json) for the canonical list and dep tags):
 
 | Stage | Agents |
 |-------|--------|
 | **Intake** | scanner, ticket-creator |
-| **Routing** | ticket-reviewer, flex-worker, linear-issue-orchestrator |
+| **Routing** | ticket-reviewer, relevance-checker, flex-worker, linear-issue-orchestrator |
 | **Implementation** | worker, declarative-refactor-specialist, folder-structure-enforcer, technical-docs-manager, branch-updater, agent-improver, dead-code-remover, code-simplifier |
 | **Quality** | tester, e2e-test-quality, e2e-test-runner, ci-triage, data-validator |
 | **Review** | code-reviewer, feedback-responder, cleanup |
