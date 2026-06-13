@@ -21,7 +21,8 @@ const PLUGIN_ROOT = resolve(__dirname, '..');
 
 export const API_VERSION = 1;
 
-// The 10 queue states, in pipeline order. Anything in `in-progress` is "active".
+// The 11 queue states, in pipeline order. Anything in `in-progress` is "active".
+// `obsolete` is terminal (retired as no-longer-relevant) — distinct from `done`.
 export const STATES = Object.freeze([
   'needs-triage',
   'needs-review',
@@ -33,6 +34,7 @@ export const STATES = Object.freeze([
   'ready-for-human',
   'done',
   'needs-info',
+  'obsolete',
 ]);
 
 const ACTIVE_STATE = 'in-progress';

@@ -107,6 +107,40 @@
     "humanReviewer": {
       "type": "string",
       "description": "GitHub handle of the human who reviews and merges PRs. The pipeline routes 'ready-for-human' PRs to this reviewer."
+    },
+    "relevance": {
+      "type": "object",
+      "description": "Tuning for the relevance-checker agent. Absent ⇒ feature off; existing installs are unaffected.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Master switch. When false (or the whole object is absent), the orchestrator never dispatches relevance-checker."
+        },
+        "ticketStaleHours": {
+          "type": "integer",
+          "default": 24,
+          "minimum": 1,
+          "description": "A needs-work ticket older than this (by mtime) becomes eligible for a relevance check."
+        },
+        "prStaleHours": {
+          "type": "integer",
+          "default": 48,
+          "minimum": 1,
+          "description": "A ready-for-human item older than this becomes eligible for a relevance check."
+        },
+        "autoResolveConfidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "default": "high",
+          "description": "Minimum verdict confidence at which an 'obsolete' item is auto-resolved (moved to obsolete/ / PR closed) rather than flagged for a human."
+        },
+        "autoClosePRs": {
+          "type": "boolean",
+          "default": true,
+          "description": "GitHub backend: run `gh pr close` on a high-confidence-obsolete PR (reversible). When false, only label/flag it."
+        }
+      }
     }
   }
 }
