@@ -224,7 +224,7 @@ const cycleEl = document.getElementById('cycle');
 const QUEUE_STATES = [
   'needs-triage', 'needs-review', 'needs-work', 'in-progress',
   'needs-test-review', 'needs-code-review', 'needs-feedback',
-  'ready-for-human', 'done', 'needs-info',
+  'ready-for-human', 'done', 'needs-info', 'obsolete',
 ];
 
 // agent name → { item, minutes } for agents the latest cycle reports as running.
