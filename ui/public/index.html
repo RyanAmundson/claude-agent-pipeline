@@ -23,11 +23,11 @@
 </header>
 <div id="cycle" class="cycle-strip" aria-live="polite" hidden></div>
 <main>
-  <section id="pipeline" data-panel="pipeline" aria-live="polite">
+  <section id="pipeline" data-panel="pipeline">
     <svg id="pipeline-graph" viewBox="0 0 1120 560"
          preserveAspectRatio="xMidYMid meet" role="img"
          aria-label="agent pipeline flow"></svg>
-    <p id="pipeline-status" class="dim">loading…</p>
+    <p id="pipeline-status" class="dim" aria-live="polite">loading…</p>
   </section>
   <pre id="log" aria-live="polite" data-panel="log"></pre>
   <section id="agents" data-panel="agents" aria-live="polite">

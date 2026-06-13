@@ -1,4 +1,5 @@
 import { initPipeline } from './pipeline.js';
+import { colorForAgent } from './colors.js';
 
 // Live log viewer for agent-pipeline. Subscribes to /api/v1/log (SSE) and
 // renders each RunEvent as a line. Color-coded per agent so concurrent runs
@@ -9,18 +10,6 @@ const statusEl = document.getElementById('status');
 const autoscrollEl = document.getElementById('autoscroll');
 const showSystemEl = document.getElementById('show-system');
 const clearBtn = document.getElementById('clear');
-
-const agentColors = new Map();
-const palette = [
-  '#7dcfff', '#9ece6a', '#e0af68', '#f7768e', '#bb9af7',
-  '#ff9e64', '#73daca', '#c0caf5',
-];
-function colorForAgent(agent) {
-  if (!agentColors.has(agent)) {
-    agentColors.set(agent, palette[agentColors.size % palette.length]);
-  }
-  return agentColors.get(agent);
-}
 
 // runId → agent name cache. Snapshot fetched once at startup; new runs are
 // resolved lazily by re-fetching when an unknown runId appears.

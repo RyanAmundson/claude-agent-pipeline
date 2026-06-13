@@ -7,17 +7,14 @@ import {
   seedModel, applyEvent, countsOf, hasTicket, pathEdgesForMove,
   countsFromCycle, runningAgentsFromCycle, countSourceForCycle,
 } from './pipeline-graph.js';
+import { colorForAgent } from './colors.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
 const EDGE_MS = 750;                       // time a token spends per edge
-const PALETTE = ['#7dcfff', '#9ece6a', '#e0af68', '#f7768e', '#bb9af7', '#ff9e64', '#73daca', '#c0caf5'];
-const agentColors = new Map();
-function colorForAgent(agent) {
-  if (!agent) return PALETTE[0];
-  if (!agentColors.has(agent)) agentColors.set(agent, PALETTE[agentColors.size % PALETTE.length]);
-  return agentColors.get(agent);
-}
+const TOKEN_R = 5;                         // token circle radius (px)
+const EDGE_FLASH_MS = 220;                 // edge flash highlight duration
+const NODE_FLASH_MS = 260;                 // node flash highlight duration
 const REDUCED = typeof matchMedia === 'function'
   && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -62,6 +59,10 @@ function buildGraph() {
 
   for (const [id, n] of Object.entries(NODES)) {
     const g = el('g', { class: `pl-node kind-${n.kind} empty`, 'data-node': id, transform: `translate(${n.x},${n.y})` });
+    // <title> first so assistive tech and tooltips pick it up as the node's name.
+    const title = el('title');
+    title.textContent = n.agent ? `${n.label} — ${n.agent}` : n.label;
+    g.append(title);
     g.append(el('rect', { class: 'pl-node-box', x: -52, y: -22, width: 104, height: 44, rx: 6 }));
     const label = el('text', { class: 'pl-node-label', y: n.agent ? -2 : 5 });
     label.textContent = n.label;
@@ -76,10 +77,6 @@ function buildGraph() {
     g.append(countBg, countText);
     nodeEls.set(id, { g, countText, countBg });
     nodeLayer.append(g);
-
-    const title = el('title');
-    title.textContent = n.agent ? `${n.label} — ${n.agent}` : n.label;
-    g.append(title);
   }
 
   svg.append(edgeLayer, tokenLayer, nodeLayer);
@@ -183,7 +180,7 @@ function spawnToken(edgeId, color, onDone) {
   const pathEl = edgeEls.get(edgeId);
   if (!pathEl) { onDone && onDone(); return; }
   const len = pathEl.getTotalLength();
-  const dot = el('circle', { class: 'pl-token', r: 5, cx: 0, cy: 0 });
+  const dot = el('circle', { class: 'pl-token', r: TOKEN_R, cx: 0, cy: 0 });
   if (color) dot.style.fill = color;
   document.getElementById('pl-tokens').append(dot);
   tokens.push({ el: dot, pathEl, len, t: 0, onDone });
@@ -191,9 +188,18 @@ function spawnToken(edgeId, color, onDone) {
 }
 
 // Animate an ordered list of edges as one continuous token (chains hops).
-function animatePath(edgeIds, color) {
+// onComplete fires after the last edge's token finishes.
+function animatePath(edgeIds, color, onComplete) {
   if (!edgeIds.length) return;
-  const run = i => { if (i < edgeIds.length) spawnToken(edgeIds[i], color, () => run(i + 1)); };
+  const run = i => {
+    if (i < edgeIds.length) {
+      const isLast = i === edgeIds.length - 1;
+      spawnToken(edgeIds[i], color, () => {
+        if (isLast && onComplete) onComplete();
+        else run(i + 1);
+      });
+    }
+  };
   run(0);
 }
 
@@ -201,14 +207,14 @@ function flashEdge(edgeId) {
   const p = edgeEls.get(edgeId);
   if (!p) return;
   p.classList.add('flash');
-  setTimeout(() => p.classList.remove('flash'), 220);
+  setTimeout(() => p.classList.remove('flash'), EDGE_FLASH_MS);
 }
 
 function flashNode(id) {
   const els = nodeEls.get(id);
   if (!els) return;
   els.g.classList.add('flash');
-  setTimeout(() => els.g.classList.remove('flash'), 260);
+  setTimeout(() => els.g.classList.remove('flash'), NODE_FLASH_MS);
 }
 
 function colorForTicket(ticket) {
@@ -232,8 +238,7 @@ function handleEvent(ev) {
     if (REDUCED || !edges.length) {
       flashNode(ev.to);
     } else {
-      animatePath(edges, color);
-      flashEdge(edges[edges.length - 1]);
+      animatePath(edges, color, () => flashEdge(edges[edges.length - 1]));
     }
     // Post-merge re-scan: when work lands in done, hint the regen edge.
     if (ev.to === 'done') flashEdge('rescan:regen');
