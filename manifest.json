@@ -43,6 +43,8 @@
     "technical-docs-manager":         { "stage": "implementation", "requires": ["github"] },
     "branch-updater":                 { "stage": "implementation", "requires": ["github"] },
     "agent-improver":                 { "stage": "implementation", "requires": ["github"], "optional": ["linear"] },
+    "dead-code-remover":              { "stage": "implementation", "requires": ["github"], "optional": ["linear"] },
+    "code-simplifier":                { "stage": "implementation", "requires": ["github"] },
     "tester":                         { "stage": "quality",        "requires": ["github"] },
     "e2e-test-quality":               { "stage": "quality",        "requires": ["github", "playwright"] },
     "e2e-test-runner":                { "stage": "quality",        "requires": ["playwright"] },

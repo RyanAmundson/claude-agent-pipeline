@@ -53,6 +53,8 @@ Each agent stamps its work with a provenance label so you can see who did what. 
 | `agent:cleanup` | Cleanup agent removed worktree/branch/labels |
 | `agent:transcript-reviewer` | Transcript reviewer logged a lesson / filed an improvement finding |
 | `agent:agent-improver` | Agent improver changed an agent/rule/doc definition |
+| `agent:dead-code-remover` | Dead-code remover deleted confirmed-dead code |
+| `agent:code-simplifier` | Code simplifier reduced complexity behavior-preservingly |
 
 ## Scope
 
@@ -131,6 +133,9 @@ The human's manual interventions are the pipeline's training signal. The goal is
 | flex-worker | Any stage is bottlenecked (3+ items) |
 | transcript-reviewer | `transcriptReview.cadence` completed runs have accumulated since its cursor, or a human intervention occurred |
 | agent-improver | `domain:pipeline-improvement` findings/tickets exist (routed here instead of the generic worker) |
+| dead-code-remover | `domain:dead-code` findings/tickets exist (routed here instead of the generic worker) |
+
+`code-simplifier` is not in this table — like `declarative-refactor-specialist`, it is **loop-based** (`consumes: loop-tick`), run on its own cadence (`/loop 30m code-simplifier`) rather than dispatched off a queue state.
 
 ## Starting the Pipeline
 
