@@ -35,6 +35,7 @@
     "scanner":                        { "stage": "intake",         "requires": [] },
     "ticket-creator":                 { "stage": "intake",         "requires": [], "optional": ["linear"] },
     "ticket-reviewer":                { "stage": "routing",        "requires": [], "optional": ["linear"] },
+    "relevance-checker":              { "stage": "routing",        "requires": [], "optional": ["github", "linear"] },
     "flex-worker":                    { "stage": "routing",        "requires": ["github"], "optional": ["linear"] },
     "linear-issue-orchestrator":     { "stage": "routing",        "requires": ["linear"] },
     "worker":                         { "stage": "implementation", "requires": ["github"], "optional": ["linear"] },
