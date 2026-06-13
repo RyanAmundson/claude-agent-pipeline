@@ -73,6 +73,7 @@ reset T7
 OUT="$(bash "$QR" T7 --verdict obsolete --confidence high --queue-dir "$QDIR" --dry-run)"
 assert_contains "$OUT" "obsoleted: T7 (dry-run)" "dry-run reports the action"
 assert_file_exists "$QDIR/needs-work/T7.json" "dry-run does not move the ticket"
+[[ -f "$QDIR/events.jsonl" ]] && _fail "dry-run must not emit events" || _ok "dry-run emits no events"
 
 # 8) usage errors
 reset T8
