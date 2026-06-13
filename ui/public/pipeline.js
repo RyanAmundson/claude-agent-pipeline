@@ -9,6 +9,21 @@ import {
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
+const EDGE_MS = 750;                       // time a token spends per edge
+const PALETTE = ['#7dcfff', '#9ece6a', '#e0af68', '#f7768e', '#bb9af7', '#ff9e64', '#73daca', '#c0caf5'];
+const agentColors = new Map();
+function colorForAgent(agent) {
+  if (!agent) return PALETTE[0];
+  if (!agentColors.has(agent)) agentColors.set(agent, PALETTE[agentColors.size % PALETTE.length]);
+  return agentColors.get(agent);
+}
+const REDUCED = typeof matchMedia === 'function'
+  && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const tokens = [];
+let raf = null;
+let lastTs = 0;
+
 let built = false;
 let svg = null;
 let statusEl = null;
@@ -108,11 +123,92 @@ function connect() {
   es.onerror = () => { es.close(); es = null; setTimeout(connect, 3000); };
 }
 
-// Task 7 replaces this with token animation; for now just keep counts current.
+function tick(ts) {
+  const dt = lastTs ? ts - lastTs : 16;
+  lastTs = ts;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const tk = tokens[i];
+    tk.t += dt / EDGE_MS;
+    const clamped = Math.min(tk.t, 1);
+    const pt = tk.pathEl.getPointAtLength(clamped * tk.len);
+    tk.el.setAttribute('cx', pt.x);
+    tk.el.setAttribute('cy', pt.y);
+    if (tk.t >= 1) {
+      tk.el.remove();
+      tokens.splice(i, 1);
+      tk.onDone && tk.onDone();
+    }
+  }
+  raf = tokens.length ? requestAnimationFrame(tick) : ((lastTs = 0), null);
+}
+
+function spawnToken(edgeId, color, onDone) {
+  const pathEl = edgeEls.get(edgeId);
+  if (!pathEl) { onDone && onDone(); return; }
+  const len = pathEl.getTotalLength();
+  const dot = el('circle', { class: 'pl-token', r: 5, cx: 0, cy: 0 });
+  if (color) dot.style.fill = color;
+  document.getElementById('pl-tokens').append(dot);
+  tokens.push({ el: dot, pathEl, len, t: 0, onDone });
+  if (!raf) raf = requestAnimationFrame(tick);
+}
+
+// Animate an ordered list of edges as one continuous token (chains hops).
+function animatePath(edgeIds, color) {
+  if (!edgeIds.length) return;
+  const run = i => { if (i < edgeIds.length) spawnToken(edgeIds[i], color, () => run(i + 1)); };
+  run(0);
+}
+
+function flashEdge(edgeId) {
+  const p = edgeEls.get(edgeId);
+  if (!p) return;
+  p.classList.add('flash');
+  setTimeout(() => p.classList.remove('flash'), 220);
+}
+
+function flashNode(id) {
+  const els = nodeEls.get(id);
+  if (!els) return;
+  els.g.classList.add('flash');
+  setTimeout(() => els.g.classList.remove('flash'), 260);
+}
+
+function colorForTicket(ticket) {
+  return colorForAgent(ticket?.source?.agent);
+}
+
 function handleEvent(ev) {
-  if (ev.type === 'ticket.move' || ev.type === 'ticket.upsert' || ev.type === 'ticket.remove') {
+  if (ev.type === 'ticket.move') {
+    const edges = pathEdgesForMove(ev.from, ev.to);
+    const color = colorForTicket(ev.ticket);
+    if (REDUCED || !edges.length) {
+      flashNode(ev.to);
+    } else {
+      animatePath(edges, color);
+      flashEdge(edges[edges.length - 1]);
+    }
+    // Post-merge re-scan: when work lands in done, hint the regen edge.
+    if (ev.to === 'done') flashEdge('rescan:regen');
     model = applyEvent(model, ev);
     renderCounts();
+    return;
+  }
+  if (ev.type === 'ticket.upsert') {
+    const isNew = !hasTicket(model, ev.ticket?.id ?? ev.id);
+    model = applyEvent(model, ev);
+    renderCounts();
+    if (isNew && ev.state === 'needs-triage' && !REDUCED) {
+      animatePath(['spine:triage'], colorForTicket(ev.ticket));
+    } else if (isNew) {
+      flashNode(ev.state);
+    }
+    return;
+  }
+  if (ev.type === 'ticket.remove') {
+    model = applyEvent(model, ev);
+    renderCounts();
+    flashNode(ev.state);
   }
 }
 
