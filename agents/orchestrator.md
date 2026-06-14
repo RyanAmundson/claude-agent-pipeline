@@ -69,6 +69,7 @@ Dispatch mapping:
 | `pipeline:needs-test-review` | tester | `.agents/tester.md` |
 | `pipeline:needs-code-review` | code-reviewer | `.agents/code-reviewer.md` |
 | `pipeline:needs-feedback` | feedback-responder | `.agents/feedback-responder.md` |
+| Staleness-gated `needs-work` ticket or `ready-for-human` item (only when `relevance.enabled`) | relevance-checker | `.agents/relevance-checker.md` |
 | `pipeline:ready-for-human` (behind main) | branch-updater | `.agents/branch-updater.md` |
 | PR touches stats/dashboard/aggregation | data-validator | `.agents/data-validator.md` |
 | Every 2 hours | data-validator (full sweep) | `.agents/data-validator.md` |
@@ -206,6 +207,7 @@ Every cycle, after the pipeline snapshot, check for anomalies and auto-recover:
 | **Behind-main on ready PR** | PR labeled `ready-for-human` but `mergeStateStatus=BEHIND` | Dispatch branch-updater to merge main |
 | **Dead code ticket worked** | Worker implements a ticket whose description says "dead code" or "not needed" | Worker must read the full ticket description before starting work |
 | **Stuck PR** | PR in same pipeline state for > 2 hours with no agent activity | Re-dispatch the appropriate agent |
+| **Stale relevance flag** | An item carries `relevance_review` (filesystem) / `pipeline:relevance-review` (GitHub/Linear) with no human action for > 3 cycles | Surface it in the cycle report `notes` (prefix `self-healing:`) — do NOT auto-resolve; retiring flagged work is the human's call |
 | **Duplicate work** | Two agents working the same PR simultaneously | Skip dispatch if recent `agent:*` comment < 15 min old |
 | **Blocked-by stale** | `blocked-by:#NNN` but #NNN is already merged | Remove `blocked-by` label, resume pipeline |
 | **CI red on ready-for-human** | PR labeled `pipeline:ready-for-human` but latest CI run is failing (common after branch-updater tier A/B fast-path) | Downgrade to `pipeline:needs-feedback`, dispatch feedback-responder to diagnose. This is the safety net for the branch-updater's overlap-based fast-path skipping re-verification |
@@ -280,6 +282,11 @@ When `.pipeline/config.json` has `backend: "filesystem"`, take the pipeline snap
 - **Report (every cycle)**: same as §4 — run `agent-pipeline cycle report --data '<payload>'` and paste its stdout verbatim. Omit `counts`; the CLI auto-snapshots the queue.
 - **Intake stays Linear-coupled (out of scope for the GitHub-free loop in v1).** `ticket-creator` and `ticket-reviewer` use Linear, so `needs-triage/` and `needs-review/` are not auto-serviced here — in filesystem mode, tickets enter the queue directly in `needs-work/` (scanner output or a human drop). Porting those two agents to filesystem intake is future work.
 - **Unresolved-human-comment scan (every cycle)**: for every ticket in every state, read `comments[]` and flag any `author:"human"` comment with no LATER `author:"feedback-responder"` "Addressed" reply → dispatch `feedback-responder`. Do NOT use a timestamp cutoff. The pipeline is never idle while such a comment exists.
+- **Relevance sweep (only when `config.relevance.enabled`)**: each cycle, list staleness-gated items with
+  `queue/queue-relevance-eligible.sh --ticket-stale-hours <relevance.ticketStaleHours> --pr-stale-hours <relevance.prStaleHours> --queue-dir <queueDir>`.
+  Dispatch **one** `relevance-checker` per eligible item (counts toward the **max 5 agents per cycle** cap), subject to the **same saturation backoff as detectors** — skip the sweep when `ready-for-human/` holds **≥ 25 items** (the filesystem analog of the detector backoff's 25-open-PR threshold; the human is the bottleneck, so don't spend dispatches retiring work nobody is reviewing). After the agent posts its verdict comment, parse the fenced `json` block and route it:
+  `queue/queue-relevance-resolve.sh <id> --verdict <v> --confidence <c> --auto-resolve-confidence <relevance.autoResolveConfidence> --queue-dir <queueDir>`.
+  The helper handles only the queue: it moves high-confidence-obsolete items to `obsolete/`, flags medium/low as `relevance_review` (left in place for a human), is a no-op for `relevant`, and stamps `relevance_checked_at` so re-listing the same item next cycle is automatically suppressed. Closing the upstream work is **your** job, not the helper's: in GitHub mode, also `gh pr close <ref>` with the reasoning comment when `relevance.autoClosePRs` and the verdict is high-confidence obsolete; in Linear mode, transition the issue to Cancelled.
 - **`ready-for-human/`** is the human's queue (merge + move to `done/` manually) — no dispatch.
 - There are no PRs to scan and no `blocked-by:*` GitHub labels; backlog readiness is simply non-empty `needs-work/`.
 

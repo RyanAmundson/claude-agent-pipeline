@@ -266,6 +266,8 @@ If you need to inspect raw state:
 
 State transitions are atomic `rename(2)` calls — first agent wins; second gets `ENOENT`. No locks needed.
 
+The terminal `queue/obsolete/` state holds work the **relevance-checker** retired as no longer relevant against `main` (distinct from `done/` = merged). It is created on first use and is gated by `config.relevance` — see [`config.schema.json`](../config.schema.json) and the README Configuration section.
+
 ---
 
 ## Versioning

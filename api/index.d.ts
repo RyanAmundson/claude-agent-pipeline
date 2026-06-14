@@ -15,7 +15,8 @@ export type QueueState =
   | 'needs-feedback'
   | 'ready-for-human'
   | 'done'
-  | 'needs-info';
+  | 'needs-info'
+  | 'obsolete';
 
 export const STATES: ReadonlyArray<QueueState>;
 

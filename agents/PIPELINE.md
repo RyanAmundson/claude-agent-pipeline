@@ -16,6 +16,8 @@ Scanner → Ticket Creator → Ticket Reviewer → Worker → Tester → Code Re
                                                                                   Cleanup
 ```
 
+A staleness-gated relevance check can retire an un-worked ticket or a parked item to `obsolete/` (high confidence) or flag it for a human (medium/low), instead of spending a worker or review cycle on work the world moved past.
+
 ## Pipeline States
 
 Each state is represented by a GitHub PR label, a Linear issue label, or a queue subdirectory (filesystem backend). An agent picks up items in its input state and transitions them to its output state.
@@ -33,6 +35,7 @@ The label namespace is configurable — defaults below assume `labelNamespace = 
 | `pipeline:needs-feedback` | Review feedback needs addressing | feedback-responder |
 | `pipeline:ready-for-human` | All automated checks pass, ready for human review | (terminal) |
 | `needs-info` | Ticket lacks detail, parked until creator updates | ticket-reviewer |
+| `obsolete` | Retired as no longer relevant (distinct from `done` = merged) | relevance-checker (via orchestrator) |
 
 ## Provenance Labels
 
@@ -55,6 +58,7 @@ Each agent stamps its work with a provenance label so you can see who did what. 
 | `agent:agent-improver` | Agent improver changed an agent/rule/doc definition |
 | `agent:dead-code-remover` | Dead-code remover deleted confirmed-dead code |
 | `agent:code-simplifier` | Code simplifier reduced complexity behavior-preservingly |
+| `agent:relevance-checker` | Relevance checker judged an item's continued relevance |
 
 ## Scope
 
@@ -127,6 +131,7 @@ The human's manual interventions are the pipeline's training signal. The goal is
 | tester | `pipeline:needs-test-review` items exist |
 | code-reviewer | `pipeline:needs-code-review` items exist |
 | feedback-responder | `pipeline:needs-feedback` items or unresolved human comments exist |
+| relevance-checker | `relevance.enabled` and a staleness-gated `needs-work`/`ready-for-human` item exists |
 | branch-updater | `pipeline:ready-for-human` PRs that are behind main |
 | scanner | No scan in the last 30 minutes |
 | cleanup | Merged PRs, stale worktrees, or label mismatches exist |
