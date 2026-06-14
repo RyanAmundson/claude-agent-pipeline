@@ -58,3 +58,31 @@ export function writeOrchestratorState(target, patch) {
   renameSync(tmp, final);
   return next;
 }
+
+/** Tier the cadence label from a cycle's nextCheckSeconds. */
+export function cadenceForSeconds(seconds) {
+  const s = seconds ?? INITIAL_CADENCE_SECONDS;
+  return s >= IDLE_CADENCE_SECONDS ? 'idle' : 'initial';
+}
+
+/** ISO timestamp `seconds` after `nowMs` (defaults to the initial cadence). */
+export function nextFireAtFrom(seconds, nowMs) {
+  const s = seconds ?? INITIAL_CADENCE_SECONDS;
+  return new Date(nowMs + s * 1000).toISOString();
+}
+
+/**
+ * Pure decision for one supervisor tick. Returns one of:
+ *   { action: 'exit' }                        — state is stopped/absent
+ *   { action: 'sleep', delayMs }              — paused, or running-not-yet-due
+ *   { action: 'dispatch' }                    — running and a cycle is due
+ */
+export function nextSupervisorStep(state, nowMs) {
+  if (!state || state.state === 'stopped') return { action: 'exit' };
+  if (state.state === 'paused') return { action: 'sleep', delayMs: SUPERVISOR_TICK_MS };
+  // running (any non-terminal state falls through here)
+  if (!state.nextFireAt) return { action: 'dispatch' };
+  const fireMs = Date.parse(state.nextFireAt);
+  if (Number.isNaN(fireMs) || nowMs >= fireMs) return { action: 'dispatch' };
+  return { action: 'sleep', delayMs: Math.min(SUPERVISOR_TICK_MS, fireMs - nowMs) };
+}
