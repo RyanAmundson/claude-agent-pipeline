@@ -55,6 +55,7 @@ Usage:
                                               Send SIGTERM to a running agent run
   agent-pipeline cycle report --data '<json>' [--target <p>]
                                               Record an orchestrator cycle + print the formatted status block
+  agent-pipeline orchestrator <sub>           start|pause|resume|restart|stop|status the orchestrator supervisor
   agent-pipeline watch [--target <p>]         Live terminal dashboard (TUI) of queue, runs, and cycles
   agent-pipeline version                      Print version
 
