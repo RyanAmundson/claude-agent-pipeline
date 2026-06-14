@@ -763,6 +763,25 @@ function detachOrchestratorSupervisor(target) {
   return child.pid;
 }
 
+async function orchestratorRestart(target, flags) {
+  const orch = await import('../api/orchestrator.js');
+  const { isProcessAlive, listRuns } = await import('../api/runs.js');
+  // Kill any in-flight orchestrator cycle run (leaves other agent runs alone).
+  for (const r of listRuns({ target }).active) {
+    if (r.agent === 'orchestrator' && r.pid) { try { process.kill(r.pid, 'SIGTERM'); } catch {} }
+  }
+  const cur = orch.readOrchestratorState(target);
+  orch.writeOrchestratorState(target, { state: 'running', cadence: 'initial', nextFireAt: new Date().toISOString() });
+  // Ensure a live supervisor (start one if none).
+  let pid = cur?.supervisorPid ?? null;
+  if (!(pid && isProcessAlive(pid))) {
+    pid = detachOrchestratorSupervisor(target);
+    orch.writeOrchestratorState(target, { supervisorPid: pid });
+  }
+  if (flags.json) console.log(JSON.stringify({ restarted: true, supervisorPid: pid }));
+  else console.log(`orchestrator restarted (supervisor pid ${pid})`);
+}
+
 async function orchestratorStart(target, flags) {
   const orch = await import('../api/orchestrator.js');
   const { isProcessAlive } = await import('../api/runs.js');

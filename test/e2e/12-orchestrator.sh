@@ -13,7 +13,8 @@ echo "═══ 12-orchestrator ════════════════
 
 WORK="$(mktemp -d -t ap-orch)"
 SPID=""
-trap 'kill "$SPID" 2>/dev/null || true; rm -rf "$WORK"' EXIT
+CYCLE_PID=""
+trap 'kill "$SPID" "${CYCLE_PID:-}" 2>/dev/null || true; rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/.pipeline/runs"
 cat > "$WORK/.pipeline/config.json" <<'JSON'
 { "backend": "filesystem" }
@@ -70,6 +71,26 @@ for _ in $(seq 1 30); do
 done
 if kill -0 "$SPID" 2>/dev/null; then _fail "supervisor pid $SPID still alive after stop"; fi
 assert_eq "$(jq -r '.state' "$STATE")" "stopped" "state is stopped after stop"
+unset AP_ORCHESTRATOR_CYCLE_FAKE
+
+# --- restart kills the in-flight orchestrator cycle run and resets cadence ---
+mkdir -p "$WORK/.pipeline/runs/active"
+sleep 120 &                                   # stand-in for an in-flight cycle's claude pid
+CYCLE_PID=$!
+cat > "$WORK/.pipeline/runs/active/fakecycle.json" <<JSON
+{ "runId": "fakecycle", "agent": "orchestrator", "status": "running", "pid": $CYCLE_PID, "startedAt": "2026-06-13T20:00:00Z" }
+JSON
+
+export AP_ORCHESTRATOR_CYCLE_FAKE=1
+$AP orchestrator restart --target "$WORK" --json >/dev/null
+SPID=$(jq -r '.supervisorPid' "$STATE")        # let the EXIT trap reap the restarted supervisor too
+# the in-flight orchestrator cycle run (CYCLE_PID) must be killed by restart
+for _ in $(seq 1 30); do kill -0 "$CYCLE_PID" 2>/dev/null || break; sleep 0.2; done
+if kill -0 "$CYCLE_PID" 2>/dev/null; then kill "$CYCLE_PID" 2>/dev/null; _fail "restart did not kill the in-flight orchestrator run"; fi
+_ok "restart killed the in-flight orchestrator cycle run"
+assert_eq "$(jq -r '.state' "$STATE")" "running" "restart leaves state running"
+assert_neq "$SPID" "null" "restart ensured a live supervisor"
+$AP orchestrator stop --target "$WORK" >/dev/null
 unset AP_ORCHESTRATOR_CYCLE_FAKE
 
 echo
