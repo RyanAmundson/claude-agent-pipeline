@@ -76,3 +76,25 @@ if $AP ticket move TKT-100 --to bogus --json --target "$WORK" >/dev/null 2>&1; t
   echo "FAIL: move should reject an unknown --to state"; exit 1
 fi
 echo "  ok: move rejects unknown target state"
+
+# ── ticket update (patch only provided fields) ─────────────────────────
+OUT=$($AP ticket update TKT-200 --title "Renamed" --labels "a, b ,c" --json --target "$WORK")
+assert_eq "$(echo "$OUT" | jq -r '.ok')" "true" "update reports ok"
+assert_eq "$(echo "$OUT" | jq -r '.ticket.title')" "Renamed" "update changes title"
+assert_eq "$(echo "$OUT" | jq -r '.ticket.labels | join(",")')" "a,b,c" "update trims+splits labels"
+# untouched field survives; comments from Task A2 are intact
+assert_eq "$(echo "$OUT" | jq -r '.ticket.comments | length')" "2" "update leaves other fields intact"
+
+# no fields provided is an error
+if $AP ticket update TKT-200 --json --target "$WORK" >/dev/null 2>&1; then
+  echo "FAIL: update with no fields should error"; exit 1
+fi
+echo "  ok: update with no fields errors"
+
+# missing ticket is an error
+if $AP ticket update NOPE --title x --json --target "$WORK" >/dev/null 2>&1; then
+  echo "FAIL: update of missing ticket should error"; exit 1
+fi
+echo "  ok: update of missing ticket errors"
+
+echo "PASS: 13-ticket-actions"

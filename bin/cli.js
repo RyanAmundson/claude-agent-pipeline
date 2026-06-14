@@ -39,6 +39,8 @@ Usage:
                                               Create a new ticket (filesystem backend)
   agent-pipeline ticket move <id> --to <state> [--json] [--target <p>]
                                               Move a ticket to a different state (filesystem backend)
+  agent-pipeline ticket update <id> [--title <t>] [--description <d>] [--priority <n>] [--labels a,b,c] [--json] [--target <p>]
+                                              Patch fields on an existing ticket (filesystem backend)
   agent-pipeline comment <id> --body "..." [--verdict pass|fail] [--target <p>]
                                               Append a human comment to a ticket (filesystem backend)
   agent-pipeline agent <name> [--target <p>] [--json]
@@ -476,6 +478,7 @@ async function runStatus(positional, flags) {
 async function runTicket(positional, flags) {
   if (positional[0] === 'create') return runTicketCreate(flags);
   if (positional[0] === 'move')   return runTicketMove(positional.slice(1), flags);
+  if (positional[0] === 'update') return runTicketUpdate(positional.slice(1), flags);
   if (positional.length !== 1) die(`Usage: agent-pipeline ticket <id> [--target <p>] [--json]`);
   const { getTicket } = await import('../api/index.js');
   const t = getTicket({ target: targetOf(flags), pluginRoot: PLUGIN_ROOT }, positional[0]);
@@ -553,6 +556,38 @@ async function runTicketMove(args, flags) {
     process.exit(err.status || 1);
   }
   if (flags.json) console.log(JSON.stringify({ ok: true, id, from, to: flags.to }, null, 2));
+}
+
+async function runTicketUpdate(args, flags) {
+  const id = args[0];
+  if (!id) die(`Usage: agent-pipeline ticket update <id> [--title <t>] [--description <d>] [--priority <n>] [--labels a,b] [--json]`);
+  const { getTicket } = await import('../api/index.js');
+  const target = targetOf(flags);
+  const queueDir = resolveQueueDir(target);
+  const before = getTicket({ target, pluginRoot: PLUGIN_ROOT }, id);
+  if (!before) die(`ticket update: no such ticket: ${id}`, 1);
+  const env = { ...process.env, CAP_NOW: new Date().toISOString() };
+  const parts = ['.updated_at = env.CAP_NOW'];
+  if (flags.title != null) { env.CAP_T = flags.title; parts.push('.title = env.CAP_T'); }
+  if (flags.description != null) { env.CAP_D = flags.description; parts.push('.description = env.CAP_D'); }
+  if (flags.priority != null && !Number.isNaN(flags.priority)) { env.CAP_P = String(flags.priority); parts.push('.priority = (env.CAP_P | tonumber)'); }
+  if (flags.labels != null) { env.CAP_L = JSON.stringify(flags.labels.split(',').map((s) => s.trim()).filter(Boolean)); parts.push('.labels = (env.CAP_L | fromjson)'); }
+  if (parts.length === 1) die(`ticket update: nothing to update (provide --title/--description/--priority/--labels)`);
+  const expr = parts.join(' | ');
+  const script = join(PLUGIN_ROOT, 'queue', 'queue-update.sh');
+  try {
+    execFileSync('bash', [script, before.state, id, expr, '--queue-dir', queueDir], {
+      env,
+      stdio: flags.json ? ['ignore', 'ignore', 'pipe'] : 'inherit',
+    });
+  } catch (err) {
+    if (flags.json && err.stderr) process.stderr.write(err.stderr.toString());
+    process.exit(err.status || 1);
+  }
+  if (flags.json) {
+    const t = getTicket({ target, pluginRoot: PLUGIN_ROOT }, id);
+    console.log(JSON.stringify({ ok: true, ticket: t }, null, 2));
+  }
 }
 
 async function runAgent(positional, flags) {
