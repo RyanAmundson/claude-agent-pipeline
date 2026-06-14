@@ -37,6 +37,8 @@ Usage:
                                               Show a single ticket
   agent-pipeline ticket create --title <t> [--description <d>] [--priority <n>] [--state <state>] [--id <id>] [--json] [--target <p>]
                                               Create a new ticket (filesystem backend)
+  agent-pipeline ticket move <id> --to <state> [--json] [--target <p>]
+                                              Move a ticket to a different state (filesystem backend)
   agent-pipeline comment <id> --body "..." [--verdict pass|fail] [--target <p>]
                                               Append a human comment to a ticket (filesystem backend)
   agent-pipeline agent <name> [--target <p>] [--json]
@@ -473,6 +475,7 @@ async function runStatus(positional, flags) {
 
 async function runTicket(positional, flags) {
   if (positional[0] === 'create') return runTicketCreate(flags);
+  if (positional[0] === 'move')   return runTicketMove(positional.slice(1), flags);
   if (positional.length !== 1) die(`Usage: agent-pipeline ticket <id> [--target <p>] [--json]`);
   const { getTicket } = await import('../api/index.js');
   const t = getTicket({ target: targetOf(flags), pluginRoot: PLUGIN_ROOT }, positional[0]);
@@ -528,6 +531,28 @@ async function runTicketCreate(flags) {
     const t = getTicket({ target, pluginRoot: PLUGIN_ROOT }, id);
     console.log(JSON.stringify({ ok: true, ticket: t }, null, 2));
   }
+}
+
+async function runTicketMove(args, flags) {
+  const id = args[0];
+  if (!id || !flags.to) die(`Usage: agent-pipeline ticket move <id> --to <state> [--json]`);
+  const { STATES, getTicket } = await import('../api/index.js');
+  if (!STATES.includes(flags.to)) die(`ticket move: unknown --to '${flags.to}' (want: ${STATES.join('|')})`);
+  const target = targetOf(flags);
+  const queueDir = resolveQueueDir(target);
+  const before = getTicket({ target, pluginRoot: PLUGIN_ROOT }, id);
+  if (!before) die(`ticket move: no such ticket: ${id}`, 1);
+  const from = before.state;
+  const script = join(PLUGIN_ROOT, 'queue', 'queue-move.sh');
+  try {
+    execFileSync('bash', [script, id, '--to', flags.to, '--queue-dir', queueDir], {
+      stdio: flags.json ? ['ignore', 'ignore', 'pipe'] : 'inherit',
+    });
+  } catch (err) {
+    if (flags.json && err.stderr) process.stderr.write(err.stderr.toString());
+    process.exit(err.status || 1);
+  }
+  if (flags.json) console.log(JSON.stringify({ ok: true, id, from, to: flags.to }, null, 2));
 }
 
 async function runAgent(positional, flags) {

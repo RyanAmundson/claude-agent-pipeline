@@ -51,3 +51,28 @@ assert_eq "$(echo "$OUT" | jq -r '.ticket.comments[-1].author')" "human" "commen
 
 OUT=$($AP comment TKT-200 --body "no verdict here" --json --target "$WORK")
 assert_eq "$(echo "$OUT" | jq -r '.verdict')" "null" "comment --json verdict is null when omitted"
+
+# ── ticket move (and the watcher observes ticket.move) ─────────────────
+EVLOG="$WORK/events.log"
+( $AP events --target "$WORK" >"$EVLOG" 2>/dev/null & echo $! > "$WORK/ev.pid" )
+sleep 0.5
+OUT=$($AP ticket move TKT-100 --to done --json --target "$WORK")
+assert_eq "$(echo "$OUT" | jq -r '.ok')" "true" "move reports ok"
+assert_eq "$(echo "$OUT" | jq -r '.from')" "needs-triage" "move reports from-state"
+assert_eq "$(echo "$OUT" | jq -r '.to')" "done" "move reports to-state"
+assert_file_exists "$QDIR/done/TKT-100.json" "move relocates the file"
+[[ ! -f "$QDIR/needs-triage/TKT-100.json" ]] || { echo "FAIL: old file still present"; exit 1; }
+sleep 0.8
+kill "$(cat "$WORK/ev.pid")" 2>/dev/null || true
+assert_contains "$(cat "$EVLOG")" "TKT-100" "watcher emitted an event mentioning the moved ticket"
+
+# move appends a best-effort audit event to events.jsonl (matches create section)
+MOVE_EVT="$(jq -c 'select(.ticket=="TKT-100" and .event=="move")' "$QDIR/events.jsonl")"
+assert_eq "$(printf '%s' "$MOVE_EVT" | jq -r '.from')" "needs-triage" "move writes an audit event (from=needs-triage)"
+assert_eq "$(printf '%s' "$MOVE_EVT" | jq -r '.to')" "done" "move writes an audit event (to=done)"
+
+# unknown target state is rejected
+if $AP ticket move TKT-100 --to bogus --json --target "$WORK" >/dev/null 2>&1; then
+  echo "FAIL: move should reject an unknown --to state"; exit 1
+fi
+echo "  ok: move rejects unknown target state"
