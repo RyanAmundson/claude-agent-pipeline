@@ -353,6 +353,7 @@ switch (cmd) {
   case 'orchestrator': runOrchestrator(positional, flags); break;
   case 'watch':  runWatchCmd(flags); break;
   case '_supervise': runSupervise(positional, flags); break;  // internal: detached supervisor
+  case '_orchestrate-supervise': runOrchestrateSupervise(flags); break;  // internal: detached orchestrator supervisor
   default: die(`Unknown command: ${cmd}\n\n${HELP}`);
 }
 
@@ -752,6 +753,34 @@ async function runSupervise(positional, flags) {
   handle.events.on('error', () => {});
   const final = await handle.result;
   process.exit(final.status === 'completed' ? 0 : 1);
+}
+
+function detachOrchestratorSupervisor(target) {
+  const child = spawn(process.execPath, [
+    fileURLToPath(import.meta.url), '_orchestrate-supervise', '--target', target,
+  ], { detached: true, stdio: 'ignore', cwd: target, env: process.env });
+  child.unref();
+  return child.pid;
+}
+
+async function orchestratorStart(target, flags) {
+  const orch = await import('../api/orchestrator.js');
+  const { isProcessAlive } = await import('../api/runs.js');
+  const cur = orch.readOrchestratorState(target);
+  if (cur && cur.state === 'running' && cur.supervisorPid && isProcessAlive(cur.supervisorPid)) {
+    die(`orchestrator already running (supervisor pid ${cur.supervisorPid}); use 'restart' to force a fresh cycle`);
+  }
+  // Mark running and due-now BEFORE detaching, so the supervisor's first tick dispatches.
+  orch.writeOrchestratorState(target, { state: 'running', cadence: 'initial', nextFireAt: new Date().toISOString() });
+  const pid = detachOrchestratorSupervisor(target);
+  orch.writeOrchestratorState(target, { supervisorPid: pid });
+  if (flags.json) console.log(JSON.stringify({ started: true, supervisorPid: pid }));
+  else console.log(`orchestrator started (supervisor pid ${pid})`);
+}
+
+async function runOrchestrateSupervise(flags) {
+  const { runOrchestratorSupervisor } = await import('../runner/orchestrator-supervisor.js');
+  await runOrchestratorSupervisor({ target: targetOf(flags) });
 }
 
 async function runRuns(positional, flags) {

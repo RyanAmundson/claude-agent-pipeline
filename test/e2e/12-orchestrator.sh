@@ -12,7 +12,8 @@ echo
 echo "═══ 12-orchestrator ═══════════════════════════════════════════════"
 
 WORK="$(mktemp -d -t ap-orch)"
-trap 'rm -rf "$WORK"' EXIT
+SPID=""
+trap 'kill "$SPID" 2>/dev/null || true; rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/.pipeline/runs"
 cat > "$WORK/.pipeline/config.json" <<'JSON'
 { "backend": "filesystem" }
@@ -39,6 +40,37 @@ assert_eq "$(jq -r '.state' "$STATE")" "stopped" "stop sets state=stopped"
 # status --json reflects the file
 OUT=$($AP orchestrator status --target "$WORK" --json)
 assert_eq "$(echo "$OUT" | jq -r '.state')" "stopped" "status reads state=stopped"
+
+# --- real detached supervisor lifecycle, claude-free via the fake-cycle seam ---
+export AP_ORCHESTRATOR_CYCLE_FAKE=1   # nextCheckSeconds=1 so a cycle is recorded fast
+START=$($AP orchestrator start --target "$WORK" --json)
+assert_eq "$(echo "$START" | jq -r '.started')" "true" "start reports started"
+SPID=$(echo "$START" | jq -r '.supervisorPid')
+assert_neq "$SPID" "null" "start records a supervisor pid"
+
+# start fires a cycle immediately; wait for the supervisor to record it
+for _ in $(seq 1 30); do
+  [ "$(jq -r '.lastCycleNumber // "null"' "$STATE")" != "null" ] && break
+  sleep 0.2
+done
+assert_neq "$(jq -r '.lastCycleNumber' "$STATE")" "null" "supervisor recorded a cycle"
+assert_eq "$(jq -r '.state' "$STATE")" "running" "supervisor state is running"
+
+# starting again refuses while a live supervisor exists
+if $AP orchestrator start --target "$WORK" --json >/dev/null 2>&1; then
+  _fail "second start should refuse while running"
+fi
+
+# stop tears down the supervisor
+$AP orchestrator stop --target "$WORK" >/dev/null
+# fake cadence => ~1s ticks, so SIGTERM is honored within the 6s poll budget
+for _ in $(seq 1 30); do
+  kill -0 "$SPID" 2>/dev/null || break
+  sleep 0.2
+done
+if kill -0 "$SPID" 2>/dev/null; then _fail "supervisor pid $SPID still alive after stop"; fi
+assert_eq "$(jq -r '.state' "$STATE")" "stopped" "state is stopped after stop"
+unset AP_ORCHESTRATOR_CYCLE_FAKE
 
 echo
 echo "12-orchestrator: all assertions passed"
