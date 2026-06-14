@@ -793,8 +793,8 @@ async function orchestratorStart(target, flags) {
   const orch = await import('../api/orchestrator.js');
   const { isProcessAlive } = await import('../api/runs.js');
   const cur = orch.readOrchestratorState(target);
-  if (cur && cur.state === 'running' && cur.supervisorPid && isProcessAlive(cur.supervisorPid)) {
-    die(`orchestrator already running (supervisor pid ${cur.supervisorPid}); use 'restart' to force a fresh cycle`);
+  if (cur && cur.supervisorPid && isProcessAlive(cur.supervisorPid)) {
+    die(`orchestrator supervisor already running (pid ${cur.supervisorPid}); use 'resume' to unpause or 'restart' to force a fresh cycle`);
   }
   // Mark running and due-now BEFORE detaching, so the supervisor's first tick dispatches.
   orch.writeOrchestratorState(target, { state: 'running', cadence: 'initial', nextFireAt: new Date().toISOString() });

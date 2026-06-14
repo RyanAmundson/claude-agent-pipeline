@@ -64,6 +64,14 @@ if $AP orchestrator start --target "$WORK" --json >/dev/null 2>&1; then
   _fail "second start should refuse while running"
 fi
 
+# a paused supervisor is still alive — start must still refuse (no double-driver)
+$AP orchestrator pause --target "$WORK" >/dev/null
+assert_eq "$(jq -r '.state' "$STATE")" "paused" "pause keeps the supervisor; state is paused"
+if $AP orchestrator start --target "$WORK" --json >/dev/null 2>&1; then
+  _fail "start must refuse while a paused supervisor is alive"
+fi
+_ok "start refuses while a paused supervisor is alive"
+
 # stop tears down the supervisor
 $AP orchestrator stop --target "$WORK" >/dev/null
 # fake cadence => ~1s ticks, so SIGTERM is honored within the 6s poll budget
