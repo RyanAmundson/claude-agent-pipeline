@@ -98,6 +98,56 @@ agent-pipeline events --target ~/Code/my-app [--json]
 
 Like `runs events`, but also includes ticket-state-machine events (`ticket.upsert | ticket.move | ticket.remove`) and orchestrator cycle summaries (`cycle.report`, one per `agent-pipeline cycle report` append).
 
+### `status` — queue snapshot
+
+```bash
+agent-pipeline status [--target ~/Code/my-app] [--json] [--state <name>]
+```
+
+Prints per-state ticket counts and the list of agents with active in-progress tickets. `--state <name>` filters to one queue state. `--json` returns the full `Snapshot` (or the filtered ticket array when `--state` is set).
+
+### `ticket <id>` — inspect a ticket
+
+```bash
+agent-pipeline ticket <id> [--target ~/Code/my-app] [--json]
+```
+
+Prints the ticket's state, priority, title, metadata, and comments. `--json` returns the raw `Ticket` object.
+
+### `ticket create` — create a ticket
+
+```bash
+agent-pipeline ticket create --title <t> [--description <d>] [--priority <n>] [--labels a,b,c] [--state <state>] [--id <id>] [--json] [--target <p>]
+```
+
+Creates a new ticket. `--state` defaults to `needs-triage`; pass any of the 11 valid states (see below). `--labels` is comma-split (trimmed) into an array, same as `ticket update`. `--id` is auto-generated when omitted. With `--json`, prints `{ ok, ticket }` where `ticket` is the newly created record. Errors if the id already exists or `--state` is not one of the 11 valid states.
+
+Valid states: `needs-triage`, `needs-review`, `needs-work`, `in-progress`, `needs-test-review`, `needs-code-review`, `needs-feedback`, `ready-for-human`, `done`, `needs-info`, `obsolete`.
+
+### `ticket move <id> --to <state>` — move a ticket
+
+```bash
+agent-pipeline ticket move <id> --to <state> [--json] [--target <p>]
+```
+
+Moves a ticket to another queue state (atomic rename). With `--json`, prints `{ ok, id, from, to }`. Errors if the ticket is missing or `--to` is not one of the 11 valid states listed above.
+
+### `ticket update <id>` — patch ticket fields
+
+```bash
+agent-pipeline ticket update <id> [--title <t>] [--description <d>] [--priority <n>] [--labels a,b,c] [--json] [--target <p>]
+```
+
+Patches only the provided fields (all others are left untouched) and bumps `updated_at`. With `--json`, prints `{ ok, ticket }` where `ticket` is the updated record. Errors if the ticket is missing or no fields are provided.
+
+### `comment <id>` — append a human comment
+
+```bash
+agent-pipeline comment <id> --body "..." [--verdict pass|fail] [--json] [--target <p>]
+```
+
+Appends a human comment (and optional verdict) to a ticket. `--author` defaults to `"human"`. With `--json`, prints `{ ok, id, verdict, ticket }` where `ticket` is the updated record and `verdict` is `null` when omitted.
+
 ### `cycle report` — record an orchestrator cycle
 
 ```bash
