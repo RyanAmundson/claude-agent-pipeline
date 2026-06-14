@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { diffRunIndexes, ensureRunsDirs, getRun, getRunEvents, indexRuns, listRuns, reapOrphanedRuns, runsRoot, RUN_STATES } from './runs.js';
 import { readCycleLines, readCycleTail, computeDeltas, cyclesFileSize } from './cycles.js';
+import { readOrchestratorState } from './orchestrator.js';
 
 export { listRuns, getRun, getRunEvents, reapOrphanedRuns, RUN_STATES };
 
@@ -163,6 +164,7 @@ export function readSnapshot(opts) {
     },
     cycle,
     cycleDeltas,
+    orchestrator: readOrchestratorState(target),
   };
 }
 

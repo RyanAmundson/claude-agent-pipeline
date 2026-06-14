@@ -115,6 +115,8 @@ export interface Snapshot {
   cycle: CycleEntry | null;
   /** Per-state deltas of `cycle.counts` vs the prior cycle, or null. */
   cycleDeltas: Record<string, number> | null;
+  /** Orchestrator supervisor state, or null if never started. */
+  orchestrator: OrchestratorStatus | null;
 }
 
 // ─── runs ──────────────────────────────────────────────────────────────────
@@ -184,6 +186,17 @@ export type WatcherEvent =
   | { type: 'run.remove';   runId: string; state: RunLifecycleState }
   | { type: 'cycle.report'; cycle: CycleEntry };
 
+/** Orchestrator lifecycle state, persisted in `.pipeline/runs/orchestrator.state.json`. */
+export interface OrchestratorStatus {
+  state: 'running' | 'paused' | 'stopped';
+  supervisorPid: number | null;
+  cadence: 'initial' | 'idle' | null;
+  lastCycleAt: string | null;
+  lastCycleNumber: number | null;
+  nextFireAt: string | null;
+  changedAt: string;
+}
+
 /** One orchestrator cycle, as appended to `.pipeline/runs/cycles.jsonl`. */
 export interface CycleEntry {
   v: 1;
@@ -227,6 +240,7 @@ export interface Watcher extends EventEmitter, AsyncIterable<WatcherEvent>, Asyn
 // ─── functions ─────────────────────────────────────────────────────────────
 
 export function readSnapshot(opts: ApiOptions): Snapshot;
+export function readOrchestratorState(target: string): OrchestratorStatus | null;
 export function getTicket(opts: ApiOptions, id: string): (Ticket & { state: QueueState }) | null;
 export function getAgent(opts: ApiOptions, name: string): Agent | null;
 export function createWatcher(opts: WatcherOptions): Watcher;

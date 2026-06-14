@@ -93,5 +93,12 @@ assert_neq "$SPID" "null" "restart ensured a live supervisor"
 $AP orchestrator stop --target "$WORK" >/dev/null
 unset AP_ORCHESTRATOR_CYCLE_FAKE
 
+# --- readSnapshot projects the orchestrator block ---
+$AP orchestrator pause --target "$WORK" >/dev/null
+SNAP=$(node --input-type=module \
+  -e 'const {readSnapshot}=await import(process.argv[1]); process.stdout.write(JSON.stringify(readSnapshot({target:process.argv[2]})))' \
+  "file://$REPO_ROOT/api/index.js" "$WORK")
+assert_eq "$(echo "$SNAP" | jq -r '.orchestrator.state')" "paused" "snapshot.orchestrator reflects state"
+
 echo
 echo "12-orchestrator: all assertions passed"
