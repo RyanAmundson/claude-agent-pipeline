@@ -35,6 +35,8 @@ Usage:
                                               Print pipeline snapshot (queued + active tickets)
   agent-pipeline ticket <id> [--target <p>] [--json]
                                               Show a single ticket
+  agent-pipeline ticket create --title <t> [--description <d>] [--priority <n>] [--state <state>] [--id <id>] [--json] [--target <p>]
+                                              Create a new ticket (filesystem backend)
   agent-pipeline comment <id> --body "..." [--verdict pass|fail] [--target <p>]
                                               Append a human comment to a ticket (filesystem backend)
   agent-pipeline agent <name> [--target <p>] [--json]
@@ -87,6 +89,7 @@ function parseFlags(args) {
     prompt: null, wait: false, detach: false, stream: false, follow: false, runId: null,
     allowedTools: [], disallowedTools: [], maxBudgetUsd: null, model: null,
     body: null, verdict: null, author: null, data: null,
+    title: null, description: null, priority: null, labels: null, to: null, id: null,
   };
   const positional = [];
   for (let i = 0; i < args.length; i++) {
@@ -120,6 +123,12 @@ function parseFlags(args) {
       case '--max-budget-usd': flags.maxBudgetUsd = Number(args[++i]); break;
       case '--model': flags.model = args[++i]; break;
       case '--body': flags.body = args[++i]; break;
+      case '--title': flags.title = args[++i]; break;
+      case '--description': flags.description = args[++i]; break;
+      case '--priority': flags.priority = Number(args[++i]); break;
+      case '--labels': flags.labels = args[++i]; break;
+      case '--to': flags.to = args[++i]; break;
+      case '--id': flags.id = args[++i]; break;
       case '--verdict': flags.verdict = args[++i]; break;
       case '--author': flags.author = args[++i]; break;
       case '--data': flags.data = args[++i]; break;
@@ -457,6 +466,7 @@ async function runStatus(positional, flags) {
 }
 
 async function runTicket(positional, flags) {
+  if (positional[0] === 'create') return runTicketCreate(flags);
   if (positional.length !== 1) die(`Usage: agent-pipeline ticket <id> [--target <p>] [--json]`);
   const { getTicket } = await import('../api/index.js');
   const t = getTicket({ target: targetOf(flags), pluginRoot: PLUGIN_ROOT }, positional[0]);
@@ -478,6 +488,39 @@ async function runTicket(positional, flags) {
       const v = c.verdict ? ` [${c.verdict}]` : '';
       console.log(`    ${(c.author || '?').padEnd(18)}${v}  ${(c.body || '').split('\n')[0]}`);
     }
+  }
+}
+
+async function runTicketCreate(flags) {
+  if (!flags.title) die(`Usage: agent-pipeline ticket create --title <t> [--description <d>] [--priority <n>] [--state <state>] [--id <id>] [--json]`);
+  const { STATES, getTicket } = await import('../api/index.js');
+  const state = flags.state || 'needs-triage';
+  if (!STATES.includes(state)) die(`ticket create: unknown --state '${state}' (want: ${STATES.join('|')})`);
+  const target = targetOf(flags);
+  const queueDir = resolveQueueDir(target);
+  const now = new Date().toISOString();
+  const id = flags.id || `tkt-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const ticket = {
+    id,
+    title: flags.title,
+    ...(flags.description ? { description: flags.description } : {}),
+    ...(flags.priority != null && !Number.isNaN(flags.priority) ? { priority: flags.priority } : {}),
+    ...(flags.labels ? { labels: flags.labels.split(',').map((s) => s.trim()).filter(Boolean) } : {}),
+    created_at: now,
+    updated_at: now,
+  };
+  const script = join(PLUGIN_ROOT, 'queue', 'queue-create.sh');
+  try {
+    execFileSync('bash', [script, state, id, JSON.stringify(ticket), '--queue-dir', queueDir], {
+      stdio: flags.json ? ['ignore', 'ignore', 'pipe'] : 'inherit',
+    });
+  } catch (err) {
+    if (flags.json && err.stderr) process.stderr.write(err.stderr.toString());
+    process.exit(err.status || 1);
+  }
+  if (flags.json) {
+    const t = getTicket({ target, pluginRoot: PLUGIN_ROOT }, id);
+    console.log(JSON.stringify({ ok: true, ticket: t }, null, 2));
   }
 }
 
