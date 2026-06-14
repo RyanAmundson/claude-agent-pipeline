@@ -350,6 +350,7 @@ switch (cmd) {
   case 'run':    runRun(positional, flags); break;
   case 'runs':   runRuns(positional, flags); break;
   case 'cycle':  runCycle(positional, flags); break;
+  case 'orchestrator': runOrchestrator(positional, flags); break;
   case 'watch':  runWatchCmd(flags); break;
   case '_supervise': runSupervise(positional, flags); break;  // internal: detached supervisor
   default: die(`Unknown command: ${cmd}\n\n${HELP}`);
@@ -549,6 +550,52 @@ async function runCycle(positional, flags) {
   const entry = buildCycleEntry(payload, prev, { backend });
   appendCycle(target, entry);
   console.log(renderBlock(entry, prev, STATES));
+}
+
+async function runOrchestrator(positional, flags) {
+  const sub = positional[0] || 'status';
+  const target = targetOf(flags);
+  const orch = await import('../api/orchestrator.js');
+  const { isProcessAlive } = await import('../api/runs.js');
+
+  const emit = (obj, line) => { if (flags.json) console.log(JSON.stringify(obj)); else console.log(line); };
+
+  switch (sub) {
+    case 'status': {
+      const st = orch.readOrchestratorState(target) || orch.defaultOrchestratorState();
+      if (flags.json) { console.log(JSON.stringify(st, null, 2)); return; }
+      console.log(`orchestrator — ${target}`);
+      console.log(`  state:      ${st.state}`);
+      console.log(`  supervisor: ${st.supervisorPid ?? '-'}`);
+      console.log(`  cadence:    ${st.cadence ?? '-'}`);
+      console.log(`  last cycle: ${st.lastCycleNumber ?? '-'} @ ${st.lastCycleAt ?? '-'}`);
+      console.log(`  next fire:  ${st.nextFireAt ?? '-'}`);
+      return;
+    }
+    case 'pause': {
+      const st = orch.writeOrchestratorState(target, { state: 'paused', nextFireAt: null });
+      emit({ state: st.state }, `orchestrator paused`);
+      return;
+    }
+    case 'resume': {
+      const st = orch.writeOrchestratorState(target, { state: 'running' });
+      emit({ state: st.state }, `orchestrator resumed`);
+      return;
+    }
+    case 'stop': {
+      const cur = orch.readOrchestratorState(target);
+      orch.writeOrchestratorState(target, { state: 'stopped', nextFireAt: null, supervisorPid: null });
+      if (cur?.supervisorPid && isProcessAlive(cur.supervisorPid)) {
+        try { process.kill(cur.supervisorPid, 'SIGTERM'); } catch {}
+      }
+      emit({ stopped: true }, `orchestrator stopped`);
+      return;
+    }
+    case 'start':   return orchestratorStart(target, flags);
+    case 'restart': return orchestratorRestart(target, flags);
+    default:
+      die(`Usage: agent-pipeline orchestrator <start|pause|resume|restart|stop|status> [--target <p>] [--json]`);
+  }
 }
 
 async function runWatchCmd(flags) {
