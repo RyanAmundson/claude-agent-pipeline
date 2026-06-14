@@ -167,7 +167,7 @@ export function reapOrphanedRuns(target, { minAgeMs = 2000 } = {}) {
   return reaped;
 }
 
-function isProcessAlive(pid) {
+export function isProcessAlive(pid) {
   try { process.kill(pid, 0); return true; }
   catch (err) { return err.code === 'EPERM'; }  // EPERM = exists but we can't signal
 }
