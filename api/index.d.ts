@@ -184,7 +184,8 @@ export type WatcherEvent =
   | { type: 'run.fail';     runId: string; from: RunLifecycleState; to: RunLifecycleState; run: Run }
   | { type: 'run.kill';     runId: string; from: RunLifecycleState; to: RunLifecycleState; run: Run }
   | { type: 'run.remove';   runId: string; state: RunLifecycleState }
-  | { type: 'cycle.report'; cycle: CycleEntry };
+  | { type: 'cycle.report'; cycle: CycleEntry }
+  | { type: 'orchestrator.changed'; orchestrator: OrchestratorStatus };
 
 /** Orchestrator lifecycle state, persisted in `.pipeline/runs/orchestrator.state.json`. */
 export interface OrchestratorStatus {

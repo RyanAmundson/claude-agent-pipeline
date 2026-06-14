@@ -629,6 +629,12 @@ function renderEvent(ev, flags, { runsOnly = false } = {}) {
       console.log(`CYCLE  #${c.cycle}  dispatched=${(c.dispatched || []).length}  ready-for-human=${ready}`);
       break;
     }
+    case 'orchestrator.changed': {
+      const o = ev.orchestrator;
+      const cadence = o.cadence ? `  cadence=${o.cadence}` : '';
+      console.log(`ORCH   state=${o.state}${cadence}`);
+      break;
+    }
   }
 }
 

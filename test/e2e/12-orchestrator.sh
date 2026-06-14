@@ -14,7 +14,9 @@ echo "═══ 12-orchestrator ════════════════
 WORK="$(mktemp -d -t ap-orch)"
 SPID=""
 CYCLE_PID=""
-trap 'kill "$SPID" "${CYCLE_PID:-}" 2>/dev/null || true; rm -rf "$WORK"' EXIT
+EV_PID=""
+EV2_PID=""
+trap 'kill "$SPID" "${CYCLE_PID:-}" "${EV_PID:-}" "${EV2_PID:-}" 2>/dev/null || true; rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/.pipeline/runs"
 cat > "$WORK/.pipeline/config.json" <<'JSON'
 { "backend": "filesystem" }
@@ -99,6 +101,33 @@ SNAP=$(node --input-type=module \
   -e 'const {readSnapshot}=await import(process.argv[1]); process.stdout.write(JSON.stringify(readSnapshot({target:process.argv[2]})))' \
   "file://$REPO_ROOT/api/index.js" "$WORK")
 assert_eq "$(echo "$SNAP" | jq -r '.orchestrator.state')" "paused" "snapshot.orchestrator reflects state"
+
+# --- watcher emits orchestrator.changed when the state file flips ---
+$AP events --target "$WORK" --json > "$WORK/events.out" 2>/dev/null &
+EV_PID=$!
+sleep 1
+$AP orchestrator resume --target "$WORK" >/dev/null     # flips the state file
+for _ in $(seq 1 25); do
+  grep -q '"type":"orchestrator.changed"' "$WORK/events.out" 2>/dev/null && break
+  sleep 0.2
+done
+kill "$EV_PID" 2>/dev/null || true
+EV_PID=""
+assert_eq "$(grep -c '"type":"orchestrator.changed"' "$WORK/events.out")" "1" "orchestrator.changed emitted once"
+
+# --- non-JSON events renders orchestrator.changed (render-arm regression) ---
+$AP events --target "$WORK" > "$WORK/events.txt" 2>/dev/null &
+EV2_PID=$!
+sleep 1
+$AP orchestrator pause --target "$WORK" >/dev/null
+for _ in $(seq 1 25); do
+  grep -q 'ORCH   state=paused' "$WORK/events.txt" 2>/dev/null && break
+  sleep 0.2
+done
+kill "$EV2_PID" 2>/dev/null || true
+EV2_PID=""
+grep -q 'ORCH   state=paused' "$WORK/events.txt" || _fail "non-JSON events did not render orchestrator.changed"
+_ok "non-JSON events renders orchestrator.changed"
 
 echo
 echo "12-orchestrator: all assertions passed"

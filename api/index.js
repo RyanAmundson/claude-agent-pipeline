@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { diffRunIndexes, ensureRunsDirs, getRun, getRunEvents, indexRuns, listRuns, reapOrphanedRuns, runsRoot, RUN_STATES } from './runs.js';
 import { readCycleLines, readCycleTail, computeDeltas, cyclesFileSize } from './cycles.js';
-import { readOrchestratorState } from './orchestrator.js';
+import { readOrchestratorState, orchestratorStatePath } from './orchestrator.js';
 
 export { listRuns, getRun, getRunEvents, reapOrphanedRuns, RUN_STATES };
 
@@ -250,6 +250,9 @@ export function createWatcher(opts) {
   // silently swallowed by a size snapshot that already includes it.
   let lastCyclesCount = readCycleLines(target).lineCount;
   let lastCyclesSize = cyclesFileSize(target);
+  // state file is rewritten in place (tmp+rename), so size isn't monotonic — mtime is the change signal
+  const orchMtime = () => { try { return statSync(orchestratorStatePath(target)).mtimeMs; } catch { return 0; } };
+  let lastOrchMtime = orchMtime();
   let closed = false;
   const watchers = [];
   let debounceTimer = null;
@@ -293,6 +296,14 @@ export function createWatcher(opts) {
       }
       lastCyclesSize = size;
       lastCyclesCount = lineCount;
+    }
+
+    // Orchestrator state changes (paused/resumed/started/stopped/cadence).
+    const om = orchMtime();
+    if (om !== lastOrchMtime) {
+      const st = readOrchestratorState(target);
+      if (st) emit({ type: 'orchestrator.changed', orchestrator: st });
+      lastOrchMtime = om;
     }
   }
 
