@@ -35,6 +35,13 @@ assert_eq() {
   else _fail "$desc — expected '$expected', got '$actual'"; fi
 }
 
+assert_neq() {
+  # assert_neq <actual> <unexpected> [<description>]
+  local actual=$1 unexpected=$2 desc=${3:-"$actual != $unexpected"}
+  if [ "$actual" != "$unexpected" ]; then _ok "$desc"
+  else _fail "$desc — expected != '$unexpected', got '$actual'"; fi
+}
+
 assert_contains() {
   # assert_contains <haystack> <needle> [<description>]
   local haystack=$1 needle=$2 desc=${3:-"contains '$needle'"}

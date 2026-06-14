@@ -28,6 +28,14 @@ export interface TicketSource {
   [k: string]: unknown;
 }
 
+/** One append-only review comment on a ticket (filesystem backend). */
+export interface TicketComment {
+  author: string;
+  verdict?: 'pass' | 'fail' | null;
+  body: string;
+  at: string;
+}
+
 export interface Ticket {
   id: string;
   title?: string;
@@ -36,6 +44,11 @@ export interface Ticket {
   labels?: string[];
   source?: TicketSource;
   pr_url?: string | null;
+  /** Filesystem-backend fields (CAP 0.3.0). */
+  branch?: string | null;
+  base?: string | null;
+  worktree?: string | null;
+  comments?: TicketComment[];
   stale_count?: number;
   created_at?: string;
   updated_at?: string;
@@ -103,6 +116,8 @@ export interface Snapshot {
   cycle: CycleEntry | null;
   /** Per-state deltas of `cycle.counts` vs the prior cycle, or null. */
   cycleDeltas: Record<string, number> | null;
+  /** Orchestrator supervisor state, or null if never started. */
+  orchestrator: OrchestratorStatus | null;
 }
 
 // ─── runs ──────────────────────────────────────────────────────────────────
@@ -170,7 +185,19 @@ export type WatcherEvent =
   | { type: 'run.fail';     runId: string; from: RunLifecycleState; to: RunLifecycleState; run: Run }
   | { type: 'run.kill';     runId: string; from: RunLifecycleState; to: RunLifecycleState; run: Run }
   | { type: 'run.remove';   runId: string; state: RunLifecycleState }
-  | { type: 'cycle.report'; cycle: CycleEntry };
+  | { type: 'cycle.report'; cycle: CycleEntry }
+  | { type: 'orchestrator.changed'; orchestrator: OrchestratorStatus };
+
+/** Orchestrator lifecycle state, persisted in `.pipeline/runs/orchestrator.state.json`. */
+export interface OrchestratorStatus {
+  state: 'running' | 'paused' | 'stopped';
+  supervisorPid: number | null;
+  cadence: 'initial' | 'idle' | null;
+  lastCycleAt: string | null;
+  lastCycleNumber: number | null;
+  nextFireAt: string | null;
+  changedAt: string;
+}
 
 /** One orchestrator cycle, as appended to `.pipeline/runs/cycles.jsonl`. */
 export interface CycleEntry {
@@ -215,6 +242,7 @@ export interface Watcher extends EventEmitter, AsyncIterable<WatcherEvent>, Asyn
 // ─── functions ─────────────────────────────────────────────────────────────
 
 export function readSnapshot(opts: ApiOptions): Snapshot;
+export function readOrchestratorState(target: string): OrchestratorStatus | null;
 export function getTicket(opts: ApiOptions, id: string): (Ticket & { state: QueueState }) | null;
 export function getAgent(opts: ApiOptions, name: string): Agent | null;
 export function createWatcher(opts: WatcherOptions): Watcher;

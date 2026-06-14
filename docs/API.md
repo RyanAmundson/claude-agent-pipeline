@@ -111,6 +111,108 @@ No `--json` flag: the JSONL file (`cycles.jsonl`) is the machine-readable form; 
 
 Each appended line becomes a `cycle.report` watcher event. Distinct from the queue audit log (`queue/events.jsonl`): that is filesystem-backend ticket-mutation audit; `cycles.jsonl` is backend-neutral orchestrator telemetry.
 
+### `orchestrator` — supervisor lifecycle
+
+The orchestrator supervisor is a **detached, long-running process** that keeps the pipeline cycling autonomously — even after the tool or shell session that started it has exited. It owns the loop cadence (initial: 270 s; idle: 1800 s) and fires `cycle report` runs on each tick. CM (or any other host tool) drives it exclusively through these subcommands; there is no need to also run `/loop orchestrator` against the same target — `start` refuses if a live supervisor already exists, protecting against two concurrent drivers.
+
+All subcommands accept `--target <path>` (defaults to CWD) and `--json`.
+
+### `orchestrator status`
+
+```bash
+agent-pipeline orchestrator status --target ~/Code/my-app [--json]
+```
+
+Reads `.pipeline/runs/orchestrator.state.json`, reconciles supervisor-pid liveness (a recorded pid that is no longer alive is reported as `stopped`, not a phantom `running`), and prints the current state. `--json` emits the full `OrchestratorStatus` object:
+
+```json
+{
+  "state": "running",
+  "supervisorPid": 12345,
+  "cadence": "initial",
+  "lastCycleAt": "2026-06-13T20:01:00.000Z",
+  "lastCycleNumber": 42,
+  "nextFireAt": "2026-06-13T20:05:30.000Z",
+  "changedAt": "2026-06-13T20:01:05.000Z"
+}
+```
+
+**`OrchestratorStatus` fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `state` | `"running" \| "paused" \| "stopped"` | Lifecycle state of the supervisor loop. |
+| `supervisorPid` | `number \| null` | PID of the live supervisor process, or `null` when stopped. |
+| `cadence` | `"initial" \| "idle" \| null` | Last applied timing tier (`null` when stopped). |
+| `lastCycleAt` | ISO string \| `null` | When the most recent cycle completed. |
+| `lastCycleNumber` | `number \| null` | Monotonically-increasing cycle counter. |
+| `nextFireAt` | ISO string \| `null` | When the next cycle is due; `null` when paused or stopped. |
+| `changedAt` | ISO string | Timestamp of the last write to the state file. |
+
+State is persisted at `<target>/.pipeline/runs/orchestrator.state.json` and exposed via the library's `readSnapshot().orchestrator` field. Every write fires an `orchestrator.changed` watcher event.
+
+### `orchestrator start`
+
+```bash
+agent-pipeline orchestrator start --target ~/Code/my-app [--json]
+```
+
+Launches a detached supervisor process, sets state to `running` at the initial cadence (270 s), and fires one cycle immediately. **Refuses** if a live supervisor already exists — use `restart` to force a fresh cycle.
+
+```json
+{ "started": true, "supervisorPid": 12345 }
+```
+
+### `orchestrator pause`
+
+```bash
+agent-pipeline orchestrator pause --target ~/Code/my-app [--json]
+```
+
+Sets state to `paused` and clears `nextFireAt`. The supervisor process stays alive but dispatches no new cycles. Any agent runs already in flight finish normally — `pause` never kills running work. Use `runs kill <runId>` to stop a specific agent run.
+
+```json
+{ "state": "paused" }
+```
+
+### `orchestrator resume`
+
+```bash
+agent-pipeline orchestrator resume --target ~/Code/my-app [--json]
+```
+
+Sets state back to `running`. The supervisor's next tick will dispatch a cycle.
+
+```json
+{ "state": "running" }
+```
+
+### `orchestrator restart`
+
+```bash
+agent-pipeline orchestrator restart --target ~/Code/my-app [--json]
+```
+
+Kills any in-flight orchestrator-cycle run (leaves all other agent runs alone), resets to the initial cadence, fires a cycle immediately, and ensures a live supervisor is running (starts one if the previous supervisor died).
+
+```json
+{ "restarted": true, "supervisorPid": 12345 }
+```
+
+### `orchestrator stop`
+
+```bash
+agent-pipeline orchestrator stop --target ~/Code/my-app [--json]
+```
+
+Sets state to `stopped`, sends SIGTERM to the supervisor process (the current tick finishes; no orphaned cycles), and clears `supervisorPid`. No agent runs are killed — only the supervisor loop terminates.
+
+```json
+{ "stopped": true }
+```
+
+---
+
 ### `watch` — live terminal dashboard
 
 ```bash

@@ -55,6 +55,7 @@ Usage:
                                               Send SIGTERM to a running agent run
   agent-pipeline cycle report --data '<json>' [--target <p>]
                                               Record an orchestrator cycle + print the formatted status block
+  agent-pipeline orchestrator <sub>           start|pause|resume|restart|stop|status the orchestrator supervisor
   agent-pipeline watch [--target <p>]         Live terminal dashboard (TUI) of queue, runs, and cycles
   agent-pipeline version                      Print version
 
@@ -350,8 +351,10 @@ switch (cmd) {
   case 'run':    runRun(positional, flags); break;
   case 'runs':   runRuns(positional, flags); break;
   case 'cycle':  runCycle(positional, flags); break;
+  case 'orchestrator': runOrchestrator(positional, flags); break;
   case 'watch':  runWatchCmd(flags); break;
   case '_supervise': runSupervise(positional, flags); break;  // internal: detached supervisor
+  case '_orchestrate-supervise': runOrchestrateSupervise(flags); break;  // internal: detached orchestrator supervisor
   default: die(`Unknown command: ${cmd}\n\n${HELP}`);
 }
 
@@ -551,6 +554,52 @@ async function runCycle(positional, flags) {
   console.log(renderBlock(entry, prev, STATES));
 }
 
+async function runOrchestrator(positional, flags) {
+  const sub = positional[0] || 'status';
+  const target = targetOf(flags);
+  const orch = await import('../api/orchestrator.js');
+  const { isProcessAlive } = await import('../api/runs.js');
+
+  const emit = (obj, line) => { if (flags.json) console.log(JSON.stringify(obj)); else console.log(line); };
+
+  switch (sub) {
+    case 'status': {
+      const st = orch.readOrchestratorState(target) || orch.defaultOrchestratorState();
+      if (flags.json) { console.log(JSON.stringify(st, null, 2)); return; }
+      console.log(`orchestrator — ${target}`);
+      console.log(`  state:      ${st.state}`);
+      console.log(`  supervisor: ${st.supervisorPid ?? '-'}`);
+      console.log(`  cadence:    ${st.cadence ?? '-'}`);
+      console.log(`  last cycle: ${st.lastCycleNumber ?? '-'} @ ${st.lastCycleAt ?? '-'}`);
+      console.log(`  next fire:  ${st.nextFireAt ?? '-'}`);
+      return;
+    }
+    case 'pause': {
+      const st = orch.writeOrchestratorState(target, { state: 'paused', nextFireAt: null });
+      emit({ state: st.state }, `orchestrator paused`);
+      return;
+    }
+    case 'resume': {
+      const st = orch.writeOrchestratorState(target, { state: 'running' });
+      emit({ state: st.state }, `orchestrator resumed`);
+      return;
+    }
+    case 'stop': {
+      const cur = orch.readOrchestratorState(target);
+      orch.writeOrchestratorState(target, { state: 'stopped', nextFireAt: null, supervisorPid: null });
+      if (cur?.supervisorPid && isProcessAlive(cur.supervisorPid)) {
+        try { process.kill(cur.supervisorPid, 'SIGTERM'); } catch {}
+      }
+      emit({ stopped: true }, `orchestrator stopped`);
+      return;
+    }
+    case 'start':   return orchestratorStart(target, flags);
+    case 'restart': return orchestratorRestart(target, flags);
+    default:
+      die(`Usage: agent-pipeline orchestrator <start|pause|resume|restart|stop|status> [--target <p>] [--json]`);
+  }
+}
+
 async function runWatchCmd(flags) {
   if (!process.stdout.isTTY) {
     die(`watch: stdout is not a TTY — the live dashboard needs an interactive terminal.\nFor pipeable output use: agent-pipeline events --json`);
@@ -579,6 +628,12 @@ function renderEvent(ev, flags, { runsOnly = false } = {}) {
       const c = ev.cycle;
       const ready = c.counts?.['ready-for-human'] || 0;
       console.log(`CYCLE  #${c.cycle}  dispatched=${(c.dispatched || []).length}  ready-for-human=${ready}`);
+      break;
+    }
+    case 'orchestrator.changed': {
+      const o = ev.orchestrator;
+      const cadence = o.cadence ? `  cadence=${o.cadence}` : '';
+      console.log(`ORCH   state=${o.state}${cadence}`);
       break;
     }
   }
@@ -705,6 +760,53 @@ async function runSupervise(positional, flags) {
   handle.events.on('error', () => {});
   const final = await handle.result;
   process.exit(final.status === 'completed' ? 0 : 1);
+}
+
+function detachOrchestratorSupervisor(target) {
+  const child = spawn(process.execPath, [
+    fileURLToPath(import.meta.url), '_orchestrate-supervise', '--target', target,
+  ], { detached: true, stdio: 'ignore', cwd: target, env: process.env });
+  child.unref();
+  return child.pid;
+}
+
+async function orchestratorRestart(target, flags) {
+  const orch = await import('../api/orchestrator.js');
+  const { isProcessAlive, listRuns } = await import('../api/runs.js');
+  // Kill any in-flight orchestrator cycle run (leaves other agent runs alone).
+  for (const r of listRuns({ target }).active) {
+    if (r.agent === 'orchestrator' && r.pid) { try { process.kill(r.pid, 'SIGTERM'); } catch {} }
+  }
+  const cur = orch.readOrchestratorState(target);
+  orch.writeOrchestratorState(target, { state: 'running', cadence: 'initial', nextFireAt: new Date().toISOString() });
+  // Ensure a live supervisor (start one if none).
+  let pid = cur?.supervisorPid ?? null;
+  if (!(pid && isProcessAlive(pid))) {
+    pid = detachOrchestratorSupervisor(target);
+    orch.writeOrchestratorState(target, { supervisorPid: pid });
+  }
+  if (flags.json) console.log(JSON.stringify({ restarted: true, supervisorPid: pid }));
+  else console.log(`orchestrator restarted (supervisor pid ${pid})`);
+}
+
+async function orchestratorStart(target, flags) {
+  const orch = await import('../api/orchestrator.js');
+  const { isProcessAlive } = await import('../api/runs.js');
+  const cur = orch.readOrchestratorState(target);
+  if (cur && cur.supervisorPid && isProcessAlive(cur.supervisorPid)) {
+    die(`orchestrator supervisor already running (pid ${cur.supervisorPid}); use 'resume' to unpause or 'restart' to force a fresh cycle`);
+  }
+  // Mark running and due-now BEFORE detaching, so the supervisor's first tick dispatches.
+  orch.writeOrchestratorState(target, { state: 'running', cadence: 'initial', nextFireAt: new Date().toISOString() });
+  const pid = detachOrchestratorSupervisor(target);
+  orch.writeOrchestratorState(target, { supervisorPid: pid });
+  if (flags.json) console.log(JSON.stringify({ started: true, supervisorPid: pid }));
+  else console.log(`orchestrator started (supervisor pid ${pid})`);
+}
+
+async function runOrchestrateSupervise(flags) {
+  const { runOrchestratorSupervisor } = await import('../runner/orchestrator-supervisor.js');
+  await runOrchestratorSupervisor({ target: targetOf(flags) });
 }
 
 async function runRuns(positional, flags) {
