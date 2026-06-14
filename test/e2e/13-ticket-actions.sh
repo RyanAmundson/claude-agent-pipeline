@@ -37,3 +37,17 @@ if $AP ticket create --title dup --id TKT-100 --json --target "$WORK" >/dev/null
   echo "FAIL: create should reject a duplicate id"; exit 1
 fi
 echo "  ok: create rejects duplicate id"
+
+# ── comment --json (verdict + plain) ───────────────────────────────────
+cat > "$QDIR/needs-code-review/TKT-200.json" <<'JSON'
+{ "id": "TKT-200", "title": "review me", "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z" }
+JSON
+OUT=$($AP comment TKT-200 --body "ship it" --verdict pass --json --target "$WORK")
+assert_eq "$(echo "$OUT" | jq -r '.ok')" "true" "comment --json reports ok"
+assert_eq "$(echo "$OUT" | jq -r '.id')" "TKT-200" "comment --json echoes id"
+assert_eq "$(echo "$OUT" | jq -r '.verdict')" "pass" "comment --json echoes verdict"
+assert_eq "$(echo "$OUT" | jq -r '.ticket.comments[-1].body')" "ship it" "comment --json returns the updated ticket"
+assert_eq "$(echo "$OUT" | jq -r '.ticket.comments[-1].author')" "human" "comment defaults author=human"
+
+OUT=$($AP comment TKT-200 --body "no verdict here" --json --target "$WORK")
+assert_eq "$(echo "$OUT" | jq -r '.verdict')" "null" "comment --json verdict is null when omitted"

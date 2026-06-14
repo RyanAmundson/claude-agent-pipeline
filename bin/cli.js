@@ -390,8 +390,8 @@ function resolveQueueDir(target) {
   return resolve(target, queueDir);
 }
 
-function runComment(positional, flags) {
-  if (positional.length !== 1) die(`Usage: agent-pipeline comment <id> --body "..." [--verdict pass|fail] [--target <p>]`);
+async function runComment(positional, flags) {
+  if (positional.length !== 1) die(`Usage: agent-pipeline comment <id> --body "..." [--verdict pass|fail] [--target <p>] [--json]`);
   if (!flags.body) die(`comment: --body is required`);
   if (flags.verdict && !['pass', 'fail'].includes(flags.verdict)) die(`comment: --verdict must be pass|fail`);
   const target = targetOf(flags);
@@ -400,9 +400,15 @@ function runComment(positional, flags) {
   const args = [script, positional[0], '--author', flags.author || 'human', '--body', flags.body, '--queue-dir', queueDir];
   if (flags.verdict) args.push('--verdict', flags.verdict);
   try {
-    execFileSync('bash', args, { stdio: 'inherit' });
+    execFileSync('bash', args, { stdio: flags.json ? ['ignore', 'ignore', 'pipe'] : 'inherit' });
   } catch (err) {
+    if (flags.json && err.stderr) process.stderr.write(err.stderr.toString());
     process.exit(err.status || 1);
+  }
+  if (flags.json) {
+    const { getTicket } = await import('../api/index.js');
+    const t = getTicket({ target, pluginRoot: PLUGIN_ROOT }, positional[0]);
+    console.log(JSON.stringify({ ok: true, id: positional[0], verdict: flags.verdict || null, ticket: t }, null, 2));
   }
 }
 
