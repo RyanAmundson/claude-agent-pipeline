@@ -17,7 +17,17 @@ test('VIEW has positive dimensions', () => {
 
 test('happy-path move resolves to its single spine edge', () => {
   assert.deepEqual(pathEdgesForMove('needs-triage', 'needs-review'), ['spine:review']);
-  assert.deepEqual(pathEdgesForMove('needs-code-review', 'ready-for-human'), ['spine:ready']);
+});
+
+test('happy path chains code-review → regression → feature-validation → ready', () => {
+  assert.deepEqual(pathEdgesForMove('needs-code-review', 'needs-regression-check'), ['spine:regression']);
+  assert.deepEqual(pathEdgesForMove('needs-regression-check', 'needs-feature-validation'), ['spine:featureval']);
+  assert.deepEqual(pathEdgesForMove('needs-feature-validation', 'ready-for-human'), ['spine:ready']);
+});
+
+test('gate FAILs loop back to needs-feedback', () => {
+  assert.deepEqual(pathEdgesForMove('needs-regression-check', 'needs-feedback'), ['fail:regression']);
+  assert.deepEqual(pathEdgesForMove('needs-feature-validation', 'needs-feedback'), ['fail:featureval']);
 });
 
 test('review FAIL loops back to needs-feedback', () => {
@@ -64,12 +74,12 @@ import { pathFor } from '../../ui/public/pipeline-graph.js';
 test('pathFor returns a quadratic bezier between node centers', () => {
   const d = pathFor(EDGES.find(e => e.id === 'spine:review'));
   // M <ax> <ay> Q <cx> <cy> <bx> <by>
-  assert.match(d, /^M 210 250 Q [\d.-]+ [\d.-]+ 340 250$/);
+  assert.match(d, /^M 190 250 Q [\d.-]+ [\d.-]+ 310 250$/);
 });
 
 test('a zero-bend edge keeps the control point on the chord midpoint', () => {
   const d = pathFor({ from: 'needs-triage', to: 'needs-review', bend: 0 });
-  assert.match(d, /^M 210 250 Q 275(\.0)? 250(\.0)? 340 250$/);
+  assert.match(d, /^M 190 250 Q 250(\.0)? 250(\.0)? 310 250$/);
 });
 
 test('a non-zero bend pushes the control point off the chord', () => {
