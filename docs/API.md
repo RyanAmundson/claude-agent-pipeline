@@ -74,6 +74,12 @@ agent-pipeline runs 20260523181128-66d539a3 events --target ~/Code/my-app [--jso
 
 Dumps `<target>/.pipeline/runs/logs/<runId>.events.jsonl`. Each line is a normalized `RunEvent`. Pipe-safe (`| head`, `| jq` etc. work without EPIPE).
 
+### `runs <runId> --follow` — live tail
+
+Streams the run's normalized events as they are written, then exits when the run
+completes. `--json` emits one JSON `RunLogLine` per line; otherwise a compact
+`<ts> <type> <activity>` form. Backed by the `streamRunLog` Node API.
+
 ### `runs kill <runId>` — terminate a running supervisor
 
 ```bash
@@ -298,6 +304,16 @@ const snap = readSnapshot({ target: '/path/to/project' });
 const { active, completed } = listRuns({ target });
 const run    = getRun({ target }, runId);     // Run | null
 const events = getRunEvents({ target }, runId); // RunEvent[] (parses the .jsonl)
+
+const stream = streamRunLog({ target }, runId);  // RunLogStream: live tail of the run's events
+stream.on('line', (line) => …);                  // RunLogLine = RunEvent & { seq }
+stream.on('end', () => …);                       // run completed (or stream.close() called)
+for await (const line of stream) { … }           // also async-iterable
+```
+
+`streamRunLog` replays existing lines (each tagged with `seq`, the 0-based ordinal position in the run's events log, so re-reads are idempotent for consumers keyed on `seq`), then live-tails newly-appended lines, and ends when the run completes. Call `stream.close()` to stop early.
+
+```js
 ```
 
 ### Subscription via `createWatcher`
