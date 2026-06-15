@@ -21,6 +21,8 @@ pipeline:needs-review          ?    → dispatch ticket-reviewer
 pipeline:needs-work            ?    → dispatch worker
 pipeline:needs-test-review     ?    → dispatch tester
 pipeline:needs-code-review     ?    → dispatch code-reviewer
+pipeline:needs-regression-check   ?    → dispatch regression-tester
+pipeline:needs-feature-validation ?    → dispatch feature-validator
 pipeline:needs-feedback        ?    → dispatch feedback-responder
 pipeline:ready-for-human       ?    → (the owner's queue — no dispatch)
 blocked-by:*                   ?    → (waiting — no dispatch)
@@ -68,6 +70,8 @@ Dispatch mapping:
 | `pipeline:needs-work` | worker | `.agents/worker.md` |
 | `pipeline:needs-test-review` | tester | `.agents/tester.md` |
 | `pipeline:needs-code-review` | code-reviewer | `.agents/code-reviewer.md` |
+| `pipeline:needs-regression-check` | regression-tester | `.agents/regression-tester.md` |
+| `pipeline:needs-feature-validation` | feature-validator | `.agents/feature-validator.md` |
 | `pipeline:needs-feedback` | feedback-responder | `.agents/feedback-responder.md` |
 | Staleness-gated `needs-work` ticket or `ready-for-human` item (only when `relevance.enabled`) | relevance-checker | `.agents/relevance-checker.md` |
 | `pipeline:ready-for-human` (behind main) | branch-updater | `.agents/branch-updater.md` |
