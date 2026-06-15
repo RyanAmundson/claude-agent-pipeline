@@ -5,15 +5,15 @@ A state-machine pipeline where each agent watches for a specific state, does its
 ## Pipeline Flow
 
 ```
-Scanner → Ticket Creator → Ticket Reviewer → Worker → Tester → Code Reviewer → Feedback Responder
-                                                                                       ↓
-                                                                               ready-for-human
-                                                                                       ↓
-                                                                               Branch Updater (merge main, push)
-                                                                                       ↓
-                                                                                Human merges
-                                                                                       ↓
-                                                                                  Cleanup
+Scanner → Ticket Creator → Ticket Reviewer → Worker → Tester → Code Reviewer → Regression Tester → Feature Validator
+                                                                                                            ↓
+                                                                                                    ready-for-human
+                                                                                                            ↓
+                                                                                            Branch Updater (merge main, push)
+                                                                                                            ↓
+                                                                                                     Human merges
+                                                                                                            ↓
+                                                                                                       Cleanup
 ```
 
 A staleness-gated relevance check can retire an un-worked ticket or a parked item to `obsolete/` (high confidence) or flag it for a human (medium/low), instead of spending a worker or review cycle on work the world moved past.
@@ -32,6 +32,8 @@ The label namespace is configurable — defaults below assume `labelNamespace = 
 | `pipeline:in-progress` | Worker is actively implementing | worker |
 | `pipeline:needs-test-review` | PR open, needs test coverage review | tester |
 | `pipeline:needs-code-review` | Tests reviewed, needs code quality review | code-reviewer |
+| `pipeline:needs-regression-check` | Code review passed; needs regression validation | regression-tester |
+| `pipeline:needs-feature-validation` | Regression passed; needs feature/acceptance validation | feature-validator |
 | `pipeline:needs-feedback` | Review feedback needs addressing | feedback-responder |
 | `pipeline:ready-for-human` | All automated checks pass, ready for human review | (terminal) |
 | `needs-info` | Ticket lacks detail, parked until creator updates | ticket-reviewer |
@@ -49,6 +51,8 @@ Each agent stamps its work with a provenance label so you can see who did what. 
 | `agent:worker` | Worker implemented this |
 | `agent:tester` | Tester reviewed tests |
 | `agent:code-reviewer` | Code reviewer reviewed code |
+| `agent:regression-tester` | Regression tester validated no functional regressions |
+| `agent:feature-validator` | Feature validator confirmed acceptance criteria with screenshots |
 | `agent:feedback-responder` | Feedback responder addressed comments |
 | `agent:flex-worker` | Flex worker filled in (note which role) |
 | `agent:orchestrator` | Orchestrator dispatched flex workers for bottleneck |
@@ -130,6 +134,8 @@ The human's manual interventions are the pipeline's training signal. The goal is
 | worker | `pipeline:needs-work` items exist |
 | tester | `pipeline:needs-test-review` items exist |
 | code-reviewer | `pipeline:needs-code-review` items exist |
+| regression-tester | `pipeline:needs-regression-check` items exist |
+| feature-validator | `pipeline:needs-feature-validation` items exist |
 | feedback-responder | `pipeline:needs-feedback` items or unresolved human comments exist |
 | relevance-checker | `relevance.enabled` and a staleness-gated `needs-work`/`ready-for-human` item exists |
 | branch-updater | `pipeline:ready-for-human` PRs that are behind main |
