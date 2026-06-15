@@ -5,7 +5,7 @@
 **Role**: Review PRs for code quality, architecture violations, and adherence to project standards.
 
 **Input**: PRs labeled `pipeline:needs-code-review`
-**Output**: PRs labeled `pipeline:ready-for-human` (pass) or `pipeline:needs-feedback` (fail)
+**Output**: PRs labeled `pipeline:needs-regression-check` (pass) or `pipeline:needs-feedback` (fail)
 **Provenance**: `agent:code-reviewer`
 **Scope**: ${REPO_SLUG} only. Only **open** PRs authored by `${GH_USER}`. Skip bots and other authors per `.pipeline/config.json` allowlist. Skip merged/closed PRs — once merged, no further review.
 
@@ -59,7 +59,7 @@ Before reviewing any PR, check ALL comment sources (issue comments, review comme
 ## On Pass
 
 1. **MUST post a comment on the PR** via `gh pr comment <PR_NUMBER> --body "[agent:code-reviewer] Code review passed. [summary with specific findings]"`. This is NOT optional — the comment is the audit trail. A PR with `agent:code-reviewer` label but no `[agent:code-reviewer]` comment is a pipeline violation.
-2. THEN add labels to the **GitHub PR** via `gh pr edit <PR_NUMBER> --remove-label "pipeline:needs-code-review" --add-label "pipeline:ready-for-human,agent:code-reviewer"` — NOT to the Linear ticket. The pipeline state machine is driven by GitHub PR labels, not Linear issue labels.
+2. THEN add labels to the **GitHub PR** via `gh pr edit <PR_NUMBER> --remove-label "pipeline:needs-code-review" --add-label "pipeline:needs-regression-check,agent:code-reviewer"` — NOT to the Linear ticket. The pipeline state machine is driven by GitHub PR labels, not Linear issue labels.
 3. **Verify both actions succeeded** before reporting back. If the comment fails to post, retry once. If the label fails, retry once. Do not report success unless both the comment AND the label are confirmed on the PR.
 
 ## On Fail
@@ -89,7 +89,7 @@ Examples of out-of-scope findings worth ticketing:
 
 ## Handoff
 
-On pass, `pipeline:ready-for-human` means all automated checks are done — ready for the owner.
+On pass, `pipeline:needs-regression-check` hands the PR to the regression-tester — code review is not the final gate; the regression and feature-validation checks still run before the PR reaches the human owner.
 On fail, `pipeline:needs-feedback` signals the feedback-responder to address the issues.
 
 ---
@@ -103,6 +103,6 @@ When `.pipeline/config.json` has `backend: "filesystem"`, do NOT use `gh`:
 3. **Review the diff**: `git -C <repoRoot> diff <base>...<branch>` against the code-review checklist.
 4. **Post summary + verdict**:
    `queue/queue-comment.sh <id> --author code-reviewer --verdict pass|fail --body "<summary with specific findings>" --queue-dir <queueDir>`
-5. **Transition**: pass → `queue/queue-claim.sh <id> needs-code-review ready-for-human`; fail → `queue/queue-claim.sh <id> needs-code-review needs-feedback` (both `--queue-dir <queueDir>`).
+5. **Transition**: pass → `queue/queue-claim.sh <id> needs-code-review needs-regression-check`; fail → `queue/queue-claim.sh <id> needs-code-review needs-feedback` (both `--queue-dir <queueDir>`).
 
-`ready-for-human/` is the human's queue — the human merges `branch` into `base` and moves the ticket to `done/` manually. Do not merge.
+`needs-regression-check/` is the next automated gate — the regression-tester picks up from here. `ready-for-human/` is the human's queue (reached after regression and feature-validation pass) — the human merges `branch` into `base` and moves the ticket to `done/` manually. Do not merge.
