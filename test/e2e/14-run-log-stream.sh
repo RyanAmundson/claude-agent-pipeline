@@ -59,4 +59,9 @@ OUT="$(cat "$WORK/out.txt")"
 assert_contains "$OUT" "0:system"     "replays first existing line with seq 0"
 assert_contains "$OUT" "1:assistant"  "replays second existing line with seq 1"
 assert_contains "$OUT" "2:result"     "live-tails the appended 3rd line with seq 2"
+
+# CLI --follow over an already-completed run: must replay all lines and exit 0.
+FOLLOW_OUT="$(node "$REPO_ROOT/bin/cli.js" runs "$RID" --follow --target "$WORK" 2>/dev/null)"
+assert_contains "$FOLLOW_OUT" "result" "cli --follow drains the completed run's events"
+
 echo "PASS: 14-run-log-stream"

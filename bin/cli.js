@@ -1010,60 +1010,16 @@ async function runRuns(positional, flags) {
 }
 
 async function followRun(target, runId, flags) {
-  const { getRun } = await import('../api/index.js');
-  const eventsPath = join(resolve(target), '.pipeline', 'runs', 'logs', `${runId}.events.jsonl`);
-
-  // Confirm the run exists at all (otherwise we'd block forever waiting).
-  if (!getRun({ target }, runId) && !existsSync(eventsPath)) {
-    die(`Run not found: ${runId}`);
-  }
-
-  let offset = 0;
-  const drain = () => {
-    if (!existsSync(eventsPath)) return;
-    const buf = readFileSync(eventsPath);
-    if (buf.length <= offset) return;
-    const fresh = buf.slice(offset).toString('utf8');
-    offset = buf.length;
-    for (const line of fresh.split('\n')) {
-      if (!line.trim()) continue;
-      if (flags.json) { process.stdout.write(line + '\n'); continue; }
-      try {
-        const ev = JSON.parse(line);
-        const activity = ev.activity ? ` ${ev.activity}` : '';
-        process.stdout.write(`${ev.ts}  [${ev.type}]${activity}\n`);
-      } catch {
-        process.stdout.write(line + '\n');
-      }
-    }
-  };
-
-  // 1) Replay everything already written
-  drain();
-
-  // 2) If the run is already finished, exit
-  let snap = getRun({ target }, runId);
-  if (snap && snap.state === 'completed') {
-    if (flags.json) process.stdout.write(JSON.stringify({ type: 'end', run: snap }) + '\n');
-    else console.log(`# done  status=${snap.status}  ${formatCost(snap.cost)}`);
-    return;
-  }
-
-  // 3) Tail: poll file size every 200ms; check completion every tick.
-  await new Promise(resolveTail => {
-    const tick = setInterval(() => {
-      drain();
-      const r = getRun({ target }, runId);
-      if (r && r.state === 'completed') {
-        clearInterval(tick);
-        // One final drain to catch any last bytes written between checks
-        drain();
-        if (flags.json) process.stdout.write(JSON.stringify({ type: 'end', run: r }) + '\n');
-        else console.log(`# done  status=${r.status}  ${formatCost(r.cost)}`);
-        resolveTail();
-      }
-    }, 200);
-    process.on('SIGINT', () => { clearInterval(tick); resolveTail(); });
+  const { streamRunLog } = await import('../api/index.js');
+  const stream = streamRunLog({ target }, runId);
+  await new Promise((resolveTail) => {
+    stream.on('line', (l) => {
+      if (flags.json) process.stdout.write(JSON.stringify(l) + '\n');
+      else process.stdout.write(`${l.ts}  ${l.type}${l.activity ? '  ' + l.activity : ''}\n`);
+    });
+    stream.on('end', resolveTail);
+    stream.on('error', (err) => { process.stderr.write(String(err) + '\n'); });
+    process.on('SIGINT', () => { stream.close(); resolveTail(); });
   });
 }
 
