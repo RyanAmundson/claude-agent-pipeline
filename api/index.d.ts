@@ -12,6 +12,8 @@ export type QueueState =
   | 'in-progress'
   | 'needs-test-review'
   | 'needs-code-review'
+  | 'needs-regression-check'
+  | 'needs-feature-validation'
   | 'needs-feedback'
   | 'ready-for-human'
   | 'done'
