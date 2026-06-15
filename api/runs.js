@@ -26,8 +26,9 @@
 //     "lastActivity": "Edit src/foo.ts"         // free-text, last tool use
 //   }
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync, watch as fsWatch, openSync, readSync, closeSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { EventEmitter } from 'node:events';
 
 export const RUN_STATES = Object.freeze(['active', 'completed']);
 
@@ -220,4 +221,131 @@ function finalEventType(run) {
   if (run.status === 'failed') return 'run.fail';
   if (run.status === 'killed') return 'run.kill';
   return 'run.complete';
+}
+
+/**
+ * Live tail of one run's normalized event log
+ * (.pipeline/runs/logs/<runId>.events.jsonl).
+ *
+ * Replays every existing line (each tagged with a 0-based `seq` = its ordinal
+ * position in the file, so re-reads are idempotent for consumers keyed on seq),
+ * then watches the logs dir and emits each newly-appended line. Ends ('end')
+ * when getRun() reports the run completed (after a final drain), or on close().
+ *
+ * Returns an EventEmitter that is also an async-iterable of RunLogLine.
+ *   on('line', (RunLogLine) => …) | on('end', () => …) | on('error', err => …)
+ *   for await (const line of streamRunLog({target}, runId)) { … }
+ */
+export function streamRunLog(opts, runId) {
+  const target = resolve(opts.target);
+  const file = logPath(target, runId, 'events.jsonl');
+  const logsDir = join(runsRoot(target), 'logs');
+  const base = `${runId}.events.jsonl`;
+
+  const emitter = new EventEmitter();
+  let offset = 0;       // byte offset consumed so far
+  let seq = 0;          // next line ordinal to assign
+  let residual = '';    // bytes after the last newline, not yet a complete line
+  let closed = false;
+  let watcher = null;
+  let pollTimer = null;
+
+  function drain() {
+    if (closed) return;
+    let size;
+    try { size = statSync(file).size; } catch { return; } // file not created yet
+    if (size <= offset) return;
+    const len = size - offset;
+    const buf = Buffer.allocUnsafe(len);
+    let fd;
+    try {
+      fd = openSync(file, 'r');
+      readSync(fd, buf, 0, len, offset);
+    } catch (err) {
+      emitter.emit('error', err);
+      return;
+    } finally {
+      if (fd !== undefined) closeSync(fd);
+    }
+    offset = size;
+    residual += buf.toString('utf8');
+    const parts = residual.split('\n');
+    residual = parts.pop() ?? ''; // keep an incomplete trailing line buffered
+    for (const line of parts) {
+      if (!line) continue;
+      let ev;
+      try { ev = JSON.parse(line); } catch { seq += 1; continue; } // skip corrupt, keep seq aligned
+      const out = { ...ev, seq };
+      seq += 1;
+      emitter.emit('line', out);
+    }
+  }
+
+  function finish() {
+    if (closed) return;
+    closed = true;
+    if (watcher) { try { watcher.close(); } catch { /* already closed */ } }
+    if (pollTimer) clearInterval(pollTimer);
+    emitter.emit('end');
+  }
+
+  emitter.close = finish;
+
+  // Async-iterable bridge over the 'line'/'end' events — mirrors createWatcher's.
+  // The queue only buffers while something is actively async-iterating: the
+  // 'line' handler early-returns when `iterating` is false, so '.on(line)'-only
+  // consumers (CM, CLI) incur zero queue growth. A `for await` consumer flips
+  // `iterating` on first `[Symbol.asyncIterator]()` call and buffers normally.
+  // (A late async consumer starts from when it begins iterating — acceptable.)
+  // Waiter draining is single-sourced in the 'end' handler.
+  const queue = [];
+  const waiters = [];
+  let iterating = false;
+  emitter.on('line', (out) => {
+    if (!iterating) return;            // no async-iterator consumer → don't buffer (fixes the leak)
+    if (waiters.length) waiters.shift()({ value: out, done: false });
+    else queue.push({ value: out, done: false });
+  });
+  emitter.on('end', () => {
+    let w; while ((w = waiters.shift())) w({ value: undefined, done: true });
+  });
+  emitter[Symbol.asyncIterator] = () => {
+    iterating = true;
+    return {
+      next: () =>
+        queue.length
+          ? Promise.resolve(queue.shift())
+          : closed
+            ? Promise.resolve({ value: undefined, done: true })
+            : new Promise((res) => waiters.push(res)),
+      return: () => { finish(); return Promise.resolve({ value: undefined, done: true }); },
+    };
+  };
+
+  // 1) replay existing lines synchronously on next tick (so callers can attach listeners first)
+  setImmediate(() => {
+    drain();
+    const r = getRun({ target }, runId);
+    if (r && r.state === 'completed') { drain(); finish(); return; }
+    // 2) live tail: fs.watch the logs dir, filter to this run's file; poll as a backstop.
+    // The watcher is `persistent: true` (it keeps the host loop alive during an
+    // active tail, exactly like createWatcher's watchers); the poll timer is
+    // unref'd so the backstop alone never pins the process — completion is still
+    // detected by the poll while the watcher holds the loop open. finish() closes
+    // both, letting the loop drain.
+    try {
+      watcher = fsWatch(logsDir, { persistent: true }, (_evt, fname) => {
+        if (fname === base) drain();
+      });
+    } catch { /* dir watch unavailable; poll-only */ }
+    const pollMs = watcher ? 2000 : 250; // slower backstop when fs.watch is healthy
+    pollTimer = setInterval(() => {
+      drain();
+      const cur = getRun({ target }, runId);
+      if (cur && cur.state === 'completed') { drain(); finish(); }
+    }, pollMs);
+    pollTimer.unref?.();
+  });
+
+  return emitter;
 }

@@ -172,6 +172,19 @@ export interface RunEvent {
   raw: unknown;        // the original stream-json payload
 }
 
+/** A RunEvent tagged with its 0-based ordinal position in the run's event log. */
+export interface RunLogLine extends RunEvent {
+  seq: number;
+}
+
+/** Live tail of one run's event log. EventEmitter + async-iterable; call close() to stop. */
+export interface RunLogStream extends EventEmitter, AsyncIterable<RunLogLine> {
+  close(): void;
+  on(event: 'line', listener: (line: RunLogLine) => void): this;
+  on(event: 'end', listener: () => void): this;
+  on(event: 'error', listener: (err: Error) => void): this;
+}
+
 // ─── events ────────────────────────────────────────────────────────────────
 
 export type WatcherEvent =
@@ -249,3 +262,4 @@ export function createWatcher(opts: WatcherOptions): Watcher;
 export function listRuns(opts: ApiOptions): { active: Run[]; completed: Run[] };
 export function getRun(opts: ApiOptions, runId: string): Run | null;
 export function getRunEvents(opts: ApiOptions, runId: string): RunEvent[];
+export function streamRunLog(opts: ApiOptions, runId: string): RunLogStream;

@@ -10,11 +10,14 @@ import { existsSync, readFileSync, readdirSync, statSync, watch as fsWatch } fro
 import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
-import { diffRunIndexes, ensureRunsDirs, getRun, getRunEvents, indexRuns, listRuns, reapOrphanedRuns, runsRoot, RUN_STATES } from './runs.js';
+import { diffRunIndexes, ensureRunsDirs, getRun, getRunEvents, indexRuns, listRuns, reapOrphanedRuns, runsRoot, RUN_STATES, streamRunLog } from './runs.js';
 import { readCycleLines, readCycleTail, computeDeltas, cyclesFileSize } from './cycles.js';
 import { readOrchestratorState, orchestratorStatePath } from './orchestrator.js';
 
-export { listRuns, getRun, getRunEvents, reapOrphanedRuns, RUN_STATES };
+export {
+  listRuns, getRun, getRunEvents, reapOrphanedRuns, RUN_STATES,
+  streamRunLog,
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
