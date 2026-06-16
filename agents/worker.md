@@ -50,6 +50,14 @@
 - Don't introduce `any` types, `@ts-nocheck`, or `eslint-disable`
 - If the ticket is too large for one cycle, break it into sub-tasks in Linear and implement the first one
 
+### Diff-size ceiling (revertibility guard)
+
+Keep each PR within `config.maxAutoFixDiffLines` (default 150) changed lines. Before opening the PR, run `git diff --stat main...HEAD`. If the change exceeds the ceiling:
+1. Do NOT open one large PR.
+2. Either split the work into multiple sequential tickets (one tiny PR each), or, if it cannot be split, label the ticket `needs-split` and stop for human guidance.
+
+Carry the originating `detector:<id>` label onto the PR so a single `git revert` of one PR cleanly undoes one detector's fix.
+
 ## Handoff
 
 The `pipeline:needs-test-review` label on the PR signals the tester agent to review test coverage. Do not self-review — let the tester validate independently.
