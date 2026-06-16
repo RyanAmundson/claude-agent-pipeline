@@ -226,7 +226,7 @@ Tickets live as JSON files under `.pipeline/queue/<state>/<id>.json`. State tran
 |-------|--------|
 | **Intake** | scanner, ticket-creator |
 | **Routing** | ticket-reviewer, relevance-checker, flex-worker, linear-issue-orchestrator |
-| **Implementation** | worker, declarative-refactor-specialist, folder-structure-enforcer, technical-docs-manager, branch-updater, agent-improver, dead-code-remover, code-simplifier |
+| **Implementation** | worker, declarative-refactor-specialist, folder-structure-enforcer, technical-docs-manager, branch-updater, agent-improver, agent-architect, dead-code-remover, code-simplifier |
 | **Quality** | tester, e2e-test-quality, e2e-test-runner, ci-triage, data-validator, regression-tester |
 | **Review** | code-reviewer, feedback-responder, cleanup, feature-validator |
 | **Detectors** (round-robin) | a11y, perf, security, pipeline-violation, mock-contract, density-system, justification, supply-chain, access-control, injection, data-protection |

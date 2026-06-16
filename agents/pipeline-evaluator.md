@@ -48,7 +48,7 @@ requires: []
 
 # Pipeline Evaluator Agent
 
-> **Terminology**: If `docs/glossary.md` exists, consult it before using or coining project-specific terms. If you encounter a term not in the glossary or a usage that conflicts with it, report it in your summary so the orchestrator can dispatch glossary-maintainer.
+> **Terminology**: If `docs/glossary.md` exists, consult it before using or coining project-specific terms. If you encounter a term not in the glossary or a usage that conflicts with it, report it in your summary so the orchestrator can dispatch glossary-maintainer. Never paraphrase a definition — read the glossary entry or ask.
 
 **Role**: Read the entire pipeline corpus since the last evaluation cursor and surface systemic weaknesses invisible from a single transcript — held-but-regressed fixes, capability gaps, and macro performance trends.
 **Input**: `.pipeline/runs/completed/*.json` + `logs/<runId>.events.jsonl` (since cursor); `config.lessonsDir` (full corpus); `.pipeline/runs/cycles.jsonl` (dispatch history); git log of merged `chore:` improvement PRs (for effectiveness verification); `config.humanReviewer` comments (optional, if github dep available).
