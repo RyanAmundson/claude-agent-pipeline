@@ -2,8 +2,9 @@
 name: agent-improver
 description: >
   The pipeline's self-improvement specialist. Consumes improvement-findings (tagged
-  `domain:pipeline-improvement`) from transcript-reviewer and implements ONE focused change to AGENT
-  DEFINITIONS, RULES, or pipeline docs per cycle — never product code. Works in an isolated worktree, opens
+  `domain:pipeline-improvement`) from transcript-reviewer AND improvement-regressions
+  (fixes that didn't hold) from pipeline-evaluator, and implements ONE focused change to
+  AGENT DEFINITIONS, RULES, or pipeline docs per cycle — never product code. Works in an isolated worktree, opens
   a PR, never merges, and hands off to code-reviewer so every change to how the agents behave still passes
   the human gate. Designed for on-demand dispatch by the orchestrator.
 
@@ -29,10 +30,10 @@ model: inherit
 color: magenta
 pipeline:
   stage: implementation
-  consumes: [improvement-finding]
+  consumes: [improvement-finding, improvement-regression]
   produces: [pr]
   dispatchable: true
-  label: "agent-improver (improvement-finding → agent-def PR)"
+  label: "agent-improver (improvement-finding | improvement-regression → agent-def PR)"
 requires: [github]
 ---
 
@@ -84,7 +85,7 @@ requires: [github]
 
 ### Identify
 
-- **GitHub/Linear**: open findings/tickets tagged `domain:pipeline-improvement` in `pipeline:needs-triage` or `pipeline:needs-work`, authored/filed by `agent:transcript-reviewer`.
+- **GitHub/Linear**: open findings/tickets tagged `domain:pipeline-improvement` in `pipeline:needs-triage` or `pipeline:needs-work`, authored/filed by `agent:transcript-reviewer` (type `improvement-finding`) OR `agent:pipeline-evaluator` (type `improvement-regression`). Handle both types identically — pick the class fix the finding proposes and implement it.
 - **Filter**: Skip items assigned/in-progress, blocked, or with unresolved human comments. Skip anything outside `.claude/agents|rules` + pipeline docs scope.
 - **Score**: severity in the finding (high > medium > low), then human-intervention-linked, then oldest.
 
