@@ -38,10 +38,10 @@ Categorize each branch:
 |---|---|---|---|
 | Any early stage | Up-to-date | Skip | No |
 | Any early stage | Behind, clean | Skip (will update later) | No |
-| Any early stage | Behind, conflicts | Label `pipeline:needs-feedback`, comment with conflicting files | No |
+| Any early stage | Behind, conflicts | Label `pipeline:needs-conflict-resolution`, comment with conflicting files | No |
 | `pipeline:ready-for-human` | Up-to-date | Skip | No |
 | `pipeline:ready-for-human` | Behind, clean | Merge main into branch, push | Yes (once) |
-| `pipeline:ready-for-human` | Behind, conflicts | Label `pipeline:needs-feedback`, feedback-responder resolves, then re-check | No (until resolved) |
+| `pipeline:ready-for-human` | Behind, conflicts | Label `pipeline:needs-conflict-resolution`, conflict-resolver resolves, then re-check | No (until resolved) |
 
 ### Conflict Resolution Handoff
 
@@ -53,10 +53,10 @@ Conflicting files:
 - src/features/agents/[components]/AgentCard/AgentCard.tsx
 - src/pages-content/protected/policies/page.tsx
 
-Labeling `pipeline:needs-feedback` for the feedback-responder to resolve.
+Labeling `pipeline:needs-conflict-resolution` for the conflict-resolver to resolve.
 ```
 
-The feedback-responder resolves the conflicts and re-labels to `pipeline:needs-test-review` (not back to ready-for-human) because conflict resolution changes code. The PR then flows through tester → code-reviewer → ready-for-human again before the branch-updater does the final merge+push.
+The **conflict-resolver** (not the feedback-responder — that agent handles human comments, not git merges) checks out the branch, merges main, and resolves the conflicts with a tiered strategy. It then re-routes by overlap tier: Tier A/B stay at `pipeline:ready-for-human` (CI confirms), Tier C downgrades to `pipeline:needs-test-review` so the PR flows through tester → code-reviewer before the branch-updater does any final merge+push. Genuinely ambiguous conflicts are escalated back to `pipeline:needs-feedback` for the human. Detection is your job; resolution is the conflict-resolver's.
 
 ### Push Rules
 

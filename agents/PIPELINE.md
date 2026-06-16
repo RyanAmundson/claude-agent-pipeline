@@ -35,6 +35,8 @@ The label namespace is configurable — defaults below assume `labelNamespace = 
 | `pipeline:needs-regression-check` | Code review passed; needs regression validation | regression-tester |
 | `pipeline:needs-feature-validation` | Regression passed; needs feature/acceptance validation | feature-validator |
 | `pipeline:needs-feedback` | Review feedback needs addressing | feedback-responder |
+| `pipeline:needs-conflict-resolution` | PR branch conflicts with main, needs a merge resolution | conflict-resolver |
+| `pipeline:resolving-conflicts` | conflict-resolver has claimed the PR and is resolving (lock) | conflict-resolver |
 | `pipeline:ready-for-human` | All automated checks pass, ready for human review | (terminal) |
 | `needs-info` | Ticket lacks detail, parked until creator updates | ticket-reviewer |
 | `obsolete` | Retired as no longer relevant (distinct from `done` = merged) | relevance-checker (via orchestrator) |
@@ -57,6 +59,7 @@ Each agent stamps its work with a provenance label so you can see who did what. 
 | `agent:flex-worker` | Flex worker filled in (note which role) |
 | `agent:orchestrator` | Orchestrator dispatched flex workers for bottleneck |
 | `agent:branch-updater` | Branch updater synced branch with main |
+| `agent:conflict-resolver` | Conflict resolver merged main and resolved conflicts |
 | `agent:cleanup` | Cleanup agent removed worktree/branch/labels |
 | `agent:transcript-reviewer` | Transcript reviewer logged a lesson / filed an improvement finding |
 | `agent:agent-improver` | Agent improver changed an agent/rule/doc definition |
@@ -137,6 +140,7 @@ The human's manual interventions are the pipeline's training signal. The goal is
 | regression-tester | `pipeline:needs-regression-check` items exist |
 | feature-validator | `pipeline:needs-feature-validation` items exist |
 | feedback-responder | `pipeline:needs-feedback` items or unresolved human comments exist |
+| conflict-resolver | `pipeline:needs-conflict-resolution` items, or open PRs that conflict with main |
 | relevance-checker | `relevance.enabled` and a staleness-gated `needs-work`/`ready-for-human` item exists |
 | branch-updater | `pipeline:ready-for-human` PRs that are behind main |
 | scanner | No scan in the last 30 minutes |

@@ -43,6 +43,7 @@
     "folder-structure-enforcer":      { "stage": "implementation", "requires": ["github"] },
     "technical-docs-manager":         { "stage": "implementation", "requires": ["github"] },
     "branch-updater":                 { "stage": "implementation", "requires": ["github"] },
+    "conflict-resolver":              { "stage": "implementation", "requires": ["github"] },
     "agent-improver":                 { "stage": "implementation", "requires": ["github"], "optional": ["linear"] },
     "dead-code-remover":              { "stage": "implementation", "requires": ["github"], "optional": ["linear"] },
     "code-simplifier":                { "stage": "implementation", "requires": ["github"] },

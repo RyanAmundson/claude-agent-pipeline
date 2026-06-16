@@ -67,7 +67,8 @@ stateDiagram-v2
         DeclarativeRefactorSpecialist: declarative-refactor-specialist
         FolderStructureEnforcer: folder-structure-enforcer
         TechnicalDocsManager: technical-docs-manager
-        BranchUpdater: branch-updater (rebase/merge main)
+        BranchUpdater: branch-updater (detect PR↔main conflicts)
+        ConflictResolver: conflict-resolver (resolve PR↔main conflicts)
     }
 
     state "QUALITY" as Stage_quality {
@@ -90,6 +91,7 @@ stateDiagram-v2
     [*] --> FlexWorker : open-pr
     [*] --> LinearIssueOrchestrator : ticket-reference
     [*] --> FeedbackResponder : pr-comment
+    [*] --> ConflictResolver : has-conflicts
     [*] --> DeclarativeRefactorSpecialist : loop-tick
     [*] --> FolderStructureEnforcer : loop-tick
     [*] --> TechnicalDocsManager : loop-tick
@@ -112,6 +114,9 @@ stateDiagram-v2
     FolderStructureEnforcer --> Art_pr
     TechnicalDocsManager --> Art_pr
     BranchUpdater --> Art_pr : rebased
+    BranchUpdater --> ConflictResolver : has-conflicts
+    ConflictResolver --> Art_pr : resolved
+    ConflictResolver --> FeedbackResponder : needs-feedback
 
     Art_pr --> Tester
     Art_pr --> E2eTestQuality

@@ -24,6 +24,7 @@ pipeline:needs-code-review     ?    → dispatch code-reviewer
 pipeline:needs-regression-check   ?    → dispatch regression-tester
 pipeline:needs-feature-validation ?    → dispatch feature-validator
 pipeline:needs-feedback        ?    → dispatch feedback-responder
+pipeline:needs-conflict-resolution ? → dispatch conflict-resolver
 pipeline:ready-for-human       ?    → (the owner's queue — no dispatch)
 blocked-by:*                   ?    → (waiting — no dispatch)
 ```
@@ -73,6 +74,7 @@ Dispatch mapping:
 | `pipeline:needs-regression-check` | regression-tester | `.agents/regression-tester.md` |
 | `pipeline:needs-feature-validation` | feature-validator | `.agents/feature-validator.md` |
 | `pipeline:needs-feedback` | feedback-responder | `.agents/feedback-responder.md` |
+| `pipeline:needs-conflict-resolution` | conflict-resolver | `.agents/conflict-resolver.md` |
 | Staleness-gated `needs-work` ticket or `ready-for-human` item (only when `relevance.enabled`) | relevance-checker | `.agents/relevance-checker.md` |
 | `pipeline:ready-for-human` (behind main) | branch-updater | `.agents/branch-updater.md` |
 | PR touches stats/dashboard/aggregation | data-validator | `.agents/data-validator.md` |
@@ -209,7 +211,7 @@ Every cycle, after the pipeline snapshot, check for anomalies and auto-recover:
 |---|---|---|
 | **Missing pipeline label** | Open PR by ${GH_USER} has no `pipeline:*` label | Infer correct state from agent comments and apply label |
 | **Label mismatch** | PR labeled `ready-for-human` but has unresolved the owner comments | Downgrade to `pipeline:needs-feedback` |
-| **Conflicts on ready PR** | PR labeled `ready-for-human` but `mergeable=CONFLICTING` | Downgrade to `pipeline:needs-feedback`, dispatch feedback-responder |
+| **Conflicts on ready PR** | PR labeled `ready-for-human` but `mergeable=CONFLICTING` | Downgrade to `pipeline:needs-conflict-resolution`, dispatch conflict-resolver |
 | **Stale PR state** | Reporting a PR as open when it's merged/closed | Always verify PR state from GitHub API each cycle, never rely on cached data |
 | **Partial comment resolution** | the owner's multi-point comment has `[agent:feedback-responder] Addressed` reply but not all points were covered | Check each bullet/point in the owner's comment against the resolution — if any point is unaddressed, keep as needs-feedback |
 | **Behind-main on ready PR** | PR labeled `ready-for-human` but `mergeStateStatus=BEHIND` | Dispatch branch-updater to merge main |
