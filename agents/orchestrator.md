@@ -159,9 +159,22 @@ This appends the cycle to `.pipeline/runs/cycles.jsonl`, which feeds `agent-pipe
 
 - Do NOT create new cron jobs — dispatched agents are one-shot
 - Do NOT dispatch for `pipeline:ready-for-human` — that's the owner's queue
+- Do NOT dispatch for `pipeline:review-queued` — it passed every automated gate and is holding for a human-review slot (see "Review Cap"); it is done, not a work target
 - Do NOT dispatch for `blocked-by` PRs — they're waiting intentionally
-- Do NOT exceed 5 agents per cycle
+- Do NOT exceed 5 agents per cycle (baseline). During an explicit owner-directed priority batch this may flex up to ~8; revert to 5 baseline, or 2 under RAM pressure (see "Resource Monitoring")
 - Do NOT dispatch for stages already being worked (check for recent `agent:*` comments < 15 min old to avoid double-dispatching)
+
+## Review Cap (Human-Review Backpressure)
+
+The human reviewer is the throughput bottleneck, but new work must never stall waiting on reviews. Decouple the two streams: **work-in-progress is unbounded** (dispatch a worker for every actionable backlog ticket per "The pipeline is NOT idle…"), while the **human-review queue is bounded**. Priority tickets flow through every automated stage (worker → tester → code-reviewer) regardless of how deep the owner's queue is; only the final promotion into the owner's queue is gated.
+
+- **`REVIEW_CAP = 20`** — the maximum number of non-draft `pipeline:ready-for-human` PRs at any time. Drafts never count (see the draft-exclusion rule). Tune to the owner's review bandwidth: lower it when they fall behind, raise it when they drain fast.
+- **Holding state `pipeline:review-queued`** — a PR that has passed *every* automated gate (tester + code-reviewer) but cannot enter the owner's queue because it is full. It is **done**, only waiting for a review slot, and is never a dispatch target for any agent. Create the label via `gh label create` if missing.
+- **Reconcile the queue every cycle** (FIFO — oldest-ready first; use PR readiness order as the tiebreaker):
+  1. **Promote**: while `count(ready-for-human) < REVIEW_CAP` and any `pipeline:review-queued` PRs exist, relabel the **oldest** `review-queued` PR → `pipeline:ready-for-human` (remove the holding label).
+  2. **Hold overflow**: if `count(ready-for-human) > REVIEW_CAP` (several code-reviewers passed in one cycle), relabel the **newest** overflow PRs `ready-for-human` → `pipeline:review-queued` until exactly `REVIEW_CAP` remain in the queue. Keep the oldest — they have waited longest.
+- The cap gates ONLY the human-review promotion. It NEVER throttles worker / tester / code-reviewer / detector dispatch.
+- The code-reviewer still applies `pipeline:ready-for-human` on PASS as usual; the orchestrator's reconcile step (above) demotes any overflow to `pipeline:review-queued` next cycle. (Brief label churn only when the queue is over cap.)
 
 ## Feedback-Responder: Special Dispatch Rules
 
@@ -178,7 +191,7 @@ These agents don't have their own loops — the orchestrator dispatches them on 
 
 - **Specialized detectors** (a11y, perf, pipeline-violation, mock-contract, density-system, justification, security): Dispatch per the table above. **Security runs every cycle.** The other six rotate round-robin — one per cycle — using this state: the last dispatched detector's name is in `.pipeline/runs/cycles.jsonl` (the last entry's `dispatched` list) or can be derived from finding filenames (most recent file in `.pipeline/findings/` tells you what just ran). Pick the next in the rotation: `a11y → perf → pipeline-violation → mock-contract → density-system → justification → a11y`. Note: `justification-detector` also runs in PR-mode whenever a PR enters `pipeline:needs-code-review` (see dispatch table) — its sweep-mode round-robin slot is for codebase-wide pattern findings only.
 - **General scanner (catch-all)**: Dispatch once per ~5 cycles ONLY for things the specialized detectors don't cover (dead code, test quality, outdated patterns, terminology drift). Instruct the scanner to SKIP anything the specialized detectors would find — pass it the list of detector responsibilities. Still respect the same 25-PR saturation backoff.
-- **Detector saturation backoff**: if `pipeline:ready-for-human` has **≥ 25 open PRs**, skip ALL detectors (including security) for that cycle — the owner is the bottleneck and piling on new findings makes it worse. Below 25, dispatch per schedule. Exception: never skip security if a critical finding was escalated in the previous cycle and is still unremediated.
+- **Detector saturation backoff**: if `pipeline:ready-for-human` + `pipeline:review-queued` together hold **≥ 25 open PRs**, skip ALL detectors (including security) for that cycle — the owner is the bottleneck and piling on new findings makes it worse. (Count the held `review-queued` PRs too: with `REVIEW_CAP = 20` the visible queue alone can't reach 25, but the held PRs are the real unmerged backlog.) Below 25, dispatch per schedule. Exception: never skip security if a critical finding was escalated in the previous cycle and is still unremediated.
 - **cleanup**: Dispatch if any PRs have been merged since the last cleanup, or if there are stale worktrees/branches/labels to audit.
 
 Everything is dispatched on-demand by the orchestrator. There are no other loops.
@@ -246,7 +259,7 @@ Every cycle, check system resource health to prevent RAM/swap accumulation:
 ### Agent Process Cleanup
 
 1. **Check running subagent count**: Use `TaskList` to see active background agents
-2. **Max concurrent agents**: 5 — if more are running, do NOT dispatch new ones until some complete
+2. **Max concurrent agents**: 5 baseline — if more are running, do NOT dispatch new ones until some complete. May flex up to ~8 during an explicit owner-directed priority batch; drop to 2 under RAM pressure.
 3. **Stale agents**: If an agent has been running > 20 minutes with no output, report it as potentially stuck
 4. **Completed agent worktrees**: After an agent completes, its worktree should be cleaned up. Check for orphaned `.claude/worktrees/agent-*` directories with no running task
 
