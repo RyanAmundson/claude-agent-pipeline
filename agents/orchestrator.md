@@ -80,7 +80,7 @@ Dispatch mapping:
 | Agent report mentions undefined term, or PR introduces new domain terminology, or ticket uses term that conflicts with glossary | glossary-maintainer | `.agents/glossary-maintainer.md` |
 | Every 7 days | glossary-maintainer (periodic audit) | `.agents/glossary-maintainer.md` |
 | Any open ${GH_USER} PR has a failing CI check (via `gh pr checks`) | ci-triage | `.agents/ci-triage.md` |
-| Round-robin detector slot (one per cycle) | a11y-detector → perf-detector → pipeline-violation-detector → mock-contract-detector → density-system-detector → justification-detector → (back to a11y) | `.agents/<detector>.md` |
+| Round-robin detector slot (one per cycle) | a11y-detector → perf-detector → pipeline-violation-detector → mock-contract-detector → density-system-detector → justification-detector → supply-chain-detector → access-control-detector → injection-detector → data-protection-detector → (back to a11y) | `.agents/<detector>.md` |
 | PR enters `pipeline:needs-code-review` | justification-detector (PR-mode, alongside code-reviewer) | `.agents/justification-detector.md` |
 | `package.json` changes in any open PR (new dep) | justification-detector | `.agents/justification-detector.md` |
 | Every cycle (always on) | security-detector | `.agents/security-detector.md` |
@@ -90,6 +90,10 @@ Dispatch mapping:
 | PR merged touching auth/config/env files | security-detector | — |
 | PR merged touching `*.api.ts`, `*.api.mock.ts`, `*.api.schema.ts`, `*.api.types.ts`, or density fixtures | mock-contract-detector | — |
 | PR merged adding `*.api.ts`, or adding `.tsx` in `[components]/` / `[pages]/` | density-system-detector | — |
+| Any open PR changes `package.json` or a lockfile (added/updated dependency) | supply-chain-detector | `.agents/supply-chain-detector.md` |
+| PR merged adding/editing route handlers, server actions, or authz middleware, or introducing a role/permission/tenant concept | access-control-detector | — |
+| PR merged touching server handlers, DB queries, or `child_process`/`fs`/`fetch` usage (new injection sinks) | injection-detector | — |
+| PR merged touching logging/telemetry, cookie/session config, or response-header/CSP/CORS config, or adding an external `<script>`/`<link>` | data-protection-detector | — |
 
 For stages with multiple items, dispatch multiple agents of the same role — each works a different item.
 
@@ -176,7 +180,7 @@ The feedback-responder is on-demand like other agents, but has an additional tri
 
 These agents don't have their own loops — the orchestrator dispatches them on a cadence:
 
-- **Specialized detectors** (a11y, perf, pipeline-violation, mock-contract, density-system, justification, security): Dispatch per the table above. **Security runs every cycle.** The other six rotate round-robin — one per cycle — using this state: the last dispatched detector's name is in `.pipeline/runs/cycles.jsonl` (the last entry's `dispatched` list) or can be derived from finding filenames (most recent file in `.pipeline/findings/` tells you what just ran). Pick the next in the rotation: `a11y → perf → pipeline-violation → mock-contract → density-system → justification → a11y`. Note: `justification-detector` also runs in PR-mode whenever a PR enters `pipeline:needs-code-review` (see dispatch table) — its sweep-mode round-robin slot is for codebase-wide pattern findings only.
+- **Specialized detectors** (a11y, perf, pipeline-violation, mock-contract, density-system, justification, security, supply-chain, access-control, injection, data-protection): Dispatch per the table above. **Security runs every cycle.** The other ten rotate round-robin — one per cycle — using this state: the last dispatched detector's name is in `.pipeline/runs/cycles.jsonl` (the last entry's `dispatched` list) or can be derived from finding filenames (most recent file in `.pipeline/findings/` tells you what just ran). Pick the next in the rotation: `a11y → perf → pipeline-violation → mock-contract → density-system → justification → supply-chain → access-control → injection → data-protection → a11y`. Note: `justification-detector` also runs in PR-mode whenever a PR enters `pipeline:needs-code-review` (see dispatch table) — its sweep-mode round-robin slot is for codebase-wide pattern findings only. The four security-slice detectors (supply-chain, access-control, injection, data-protection) carve distinct surfaces out of `security-detector`, which now focuses on inline secrets, DOM-XSS, and postMessage — so they don't double-file against each other or against security.
 - **General scanner (catch-all)**: Dispatch once per ~5 cycles ONLY for things the specialized detectors don't cover (dead code, test quality, outdated patterns, terminology drift). Instruct the scanner to SKIP anything the specialized detectors would find — pass it the list of detector responsibilities. Still respect the same 25-PR saturation backoff.
 - **Detector saturation backoff**: if `pipeline:ready-for-human` has **≥ 25 open PRs**, skip ALL detectors (including security) for that cycle — the owner is the bottleneck and piling on new findings makes it worse. Below 25, dispatch per schedule. Exception: never skip security if a critical finding was escalated in the previous cycle and is still unremediated.
 - **cleanup**: Dispatch if any PRs have been merged since the last cleanup, or if there are stale worktrees/branches/labels to audit.

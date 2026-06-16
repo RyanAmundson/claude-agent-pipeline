@@ -80,7 +80,7 @@ gh label create "$labelNamespace:needs-feedback"      --color "D93F0B" --descrip
 gh label create "$labelNamespace:ready-for-human"     --color "0E8A16" --description "All automated checks pass"
 
 # Agent provenance labels
-for agent in scanner ticket-creator ticket-reviewer worker tester code-reviewer regression-tester feature-validator feedback-responder flex-worker orchestrator branch-updater cleanup ci-triage a11y-detector perf-detector security-detector data-fidelity-reviewer glossary-maintainer e2e-test-runner e2e-test-quality; do
+for agent in scanner ticket-creator ticket-reviewer worker tester code-reviewer regression-tester feature-validator feedback-responder flex-worker orchestrator branch-updater cleanup ci-triage a11y-detector perf-detector security-detector supply-chain-detector access-control-detector injection-detector data-protection-detector data-fidelity-reviewer glossary-maintainer e2e-test-runner e2e-test-quality; do
   gh label create "$agentLabelNamespace:$agent" --color "C5DEF5" --description "Provenance: $agent"
 done
 
