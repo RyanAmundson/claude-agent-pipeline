@@ -25,8 +25,8 @@ export function computeGate(verdicts) {
 }
 
 /** Read a completed run's final assistant text from its events log. */
-function finalMessageOf(target, runId) {
-  const events = getRunEvents(target, runId); // array of normalized events
+export function finalMessageOf(target, runId) {
+  const events = getRunEvents({ target }, runId); // array of normalized events
   for (let i = events.length - 1; i >= 0; i--) {
     const e = events[i];
     if (e.type === 'assistant') {
@@ -43,17 +43,20 @@ function finalMessageOf(target, runId) {
 /**
  * Fan out matched diff-mode detectors for a PR, persist verdicts, compute the gate.
  * @param {{target:string, pr:string, changedFiles:Array<{path,content}>, registry:any[], diffPrompt:(d:any)=>string}} o
+ * @param {{dispatch?:Function, finalMessageOf?:Function}} [deps] injectable seams for tests
  */
-export async function runDetectorGate({ target, pr, changedFiles, registry, diffPrompt }) {
+export async function runDetectorGate({ target, pr, changedFiles, registry, diffPrompt }, deps = {}) {
+  const dispatchFn = deps.dispatch || dispatch;
+  const readFinal = deps.finalMessageOf || finalMessageOf;
   const matched = matchDetectors(registry, changedFiles, { mode: 'diff' });
   const reviewsDir = join(target, '.pipeline', 'reviews', String(pr));
   mkdirSync(reviewsDir, { recursive: true });
 
   const verdicts = await Promise.all(matched.map(async (d) => {
-    const h = dispatch({ agent: `${d.id}-detector`, prompt: diffPrompt(d), target, model: d.model });
+    const h = dispatchFn({ agent: `${d.id}-detector`, prompt: diffPrompt(d), target, model: d.model });
     const run = await h.result;
     const verdict = run.status === 'completed'
-      ? extractVerdict(finalMessageOf(target, run.runId))
+      ? extractVerdict(readFinal(target, run.runId))
       : { verdict: 'veto', findings: [], reason: 'malformed-or-missing' }; // crash → fail-closed
     writeFileSync(join(reviewsDir, `detector-${d.id}.json`), JSON.stringify({ detector: d.id, ...verdict }, null, 2));
     return verdict;
