@@ -83,6 +83,8 @@ Dispatch mapping:
 | Every 2 hours | data-validator (full sweep) | `.agents/data-validator.md` |
 | Agent report mentions undefined term, or PR introduces new domain terminology, or ticket uses term that conflicts with glossary | glossary-maintainer | `.agents/glossary-maintainer.md` |
 | Every 7 days | glossary-maintainer (periodic audit) | `.agents/glossary-maintainer.md` |
+| `pipelineEvaluation.enabled` and any threshold tripped since the `.pipeline/improvement/cursor.json` baseline (completed runs ≥ `cadence`, OR new lessons ≥ `minNewLessons`, OR merged improvement PRs ≥ `minImproverMerges`) | pipeline-evaluator | `.agents/pipeline-evaluator.md` |
+| `capability-gap` findings/tickets exist (requires `pipelineEvaluation.enabled`) | agent-architect | `.agents/agent-architect.md` |
 | Any open ${GH_USER} PR has a failing CI check (via `gh pr checks`) | ci-triage | `.agents/ci-triage.md` |
 | Round-robin detector slot (one per cycle) | a11y-detector → perf-detector → pipeline-violation-detector → mock-contract-detector → density-system-detector → justification-detector → supply-chain-detector → access-control-detector → injection-detector → data-protection-detector → (back to a11y) | `.agents/<detector>.md` |
 | PR enters `pipeline:needs-code-review` | justification-detector (PR-mode, alongside code-reviewer) | `.agents/justification-detector.md` |
@@ -100,6 +102,8 @@ Dispatch mapping:
 | PR merged touching logging/telemetry, cookie/session config, or response-header/CSP/CORS config, or adding an external `<script>`/`<link>` | data-protection-detector | — |
 
 For stages with multiple items, dispatch multiple agents of the same role — each works a different item.
+
+**Finding-type routing (`domain:pipeline-improvement`).** These findings route by type, not all to one agent: `improvement-finding` (from transcript-reviewer) and `improvement-regression` (from pipeline-evaluator) → `agent-improver`; `capability-gap` (from pipeline-evaluator) → `agent-architect`; `strategy-finding` (from pipeline-evaluator) stays in `pipeline:needs-triage` for the human (no auto-dispatch).
 
 - **`pipeline:needs-detector-gate`** (only when `config.detectors.diffGate.enabled`, default true): trigger `runner/detector-gate.js` for the PR. It fans out the diff-mode detectors whose glob+prefilter match the PR's changed files, persists `.pipeline/reviews/<pr>/detector-*.json`, and computes the severity gate: any `blocker`/`major` (or any `veto`) → re-label `pipeline:needs-feedback` (feedback-responder consumes it); otherwise advance to the next state (`pipeline:needs-regression-check`, or `pipeline:ready-for-human` if the regression/feature gates are disabled). When `diffGate.enabled` is false, `code-reviewer` advances straight past this state with no panel.
 

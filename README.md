@@ -230,7 +230,7 @@ Tickets live as JSON files under `.pipeline/queue/<state>/<id>.json`. State tran
 | **Quality** | tester, e2e-test-quality, e2e-test-runner, ci-triage, data-validator, regression-tester |
 | **Review** | code-reviewer, feedback-responder, cleanup, feature-validator |
 | **Detectors** (round-robin) | a11y, perf, security, pipeline-violation, mock-contract, density-system, justification, supply-chain, access-control, injection, data-protection |
-| **Improvement** | transcript-reviewer (reviews run/session transcripts → lessons + agent-def fixes via agent-improver) |
+| **Improvement** | transcript-reviewer (per-run: transcripts → lessons + improvement-findings via agent-improver); pipeline-evaluator (corpus-level, opt-in: effectiveness verification + capability-gap detection → improvement-regressions via agent-improver + capability-gaps via agent-architect) |
 | **Utilities** | glossary-maintainer, context-mapper, git-worktree-manager |
 | **Meta** | orchestrator |
 

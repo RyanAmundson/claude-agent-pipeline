@@ -37,6 +37,9 @@ Every artifact must have **exactly one producer**, with a small allowlist of del
 |----------|------------------------------------|
 | `pr` | Every implementation specialist emits PRs — this is the pipeline's fan-in point into Quality |
 | `routed-task` | Multiple routers (`flex-worker`, `linear-issue-orchestrator`, `feedback-responder`) legitimately dispatch work |
+| `improvement-regression` | Single producer (pipeline-evaluator), single consumer (agent-improver — extends its existing consumes). Listed here to document the producer/consumer contract. |
+| `capability-gap` | Single producer (pipeline-evaluator), single consumer (agent-architect). |
+| `strategy-finding` | Single producer (pipeline-evaluator). No automatic consumer — stays in human triage. |
 
 Anything else means two agents are competing for the same job. Before adding an artifact to the allowlist, first ask: *can we split the artifact into two named ones that each have a single owner?* That's almost always the right answer.
 
@@ -157,6 +160,6 @@ stateDiagram-v2
 
 - Every bug fix must leave Quality with at least one regression test (unit or E2E — spans both if logic + UI).
 - A PR can cycle through Review ↔ Routing any number of times via `feedback-responder` until the human owner approves.
-- The pipeline improves itself: `transcript-reviewer` (stage `improvement`) reads completed-run and session transcripts plus human interventions, logs compounding lessons, and files `improvement-finding`s that `agent-improver` turns into agent/rule/doc PRs — closing the Continuous-Improvement loop. `improvement-finding` has a single producer (transcript-reviewer) and a single consumer (agent-improver).
+- The pipeline improves itself via a five-layer stack: (1) the orchestrator's §3.5 self-audit (every cycle, shallow); (2) `transcript-reviewer` (stage `improvement`) reads individual run/session transcripts → lessons + `improvement-finding`s; (3) `agent-improver` (stage `implementation`) implements one finding per cycle as an agent/rule/doc PR; (4) `pipeline-evaluator` (stage `improvement`, volume-triggered, opt-in via `pipelineEvaluation.enabled`) reads the ENTIRE corpus to produce `improvement-regression` (fix didn't hold → agent-improver), `capability-gap` (structural gap → agent-architect), and `strategy-finding` (human triage); (5) `agent-architect` (stage `implementation`) creates/retires agents and rewires topology per capability-gap findings. Finding-type invariant: each type has exactly one producer and one consumer (see role-overlap table).
 - The codebase simplifies itself across two agents that never produce a behavior change. `dead-code-remover` is dispatched when `dead-code-finding`s exist (single producer: `scanner`'s deep dead-code scan, which only reports) and *deletes* confirmed-unreachable code. `code-simplifier` is loop-based (`loop-tick`) and *restructures reachable* code to be simpler, pinning current behavior under a characterization test before each change. Both emit only `pr` (the allowlisted fan-in) and hand off to Quality — neither merges, and neither runs the test suite.
 - Only `feat:` / `fix:` / `perf:` merges trigger a release; other types ship without a version bump (per conventional-commits).

@@ -63,6 +63,8 @@ Each agent stamps its work with a provenance label so you can see who did what. 
 | `agent:cleanup` | Cleanup agent removed worktree/branch/labels |
 | `agent:transcript-reviewer` | Transcript reviewer logged a lesson / filed an improvement finding |
 | `agent:agent-improver` | Agent improver changed an agent/rule/doc definition |
+| `agent:pipeline-evaluator` | Pipeline evaluator wrote a scorecard entry or filed an improvement-regression / capability-gap / strategy-finding |
+| `agent:agent-architect` | Agent architect created/retired an agent or changed topology (see ledger.jsonl) |
 | `agent:dead-code-remover` | Dead-code remover deleted confirmed-dead code |
 | `agent:code-simplifier` | Code simplifier reduced complexity behavior-preservingly |
 | `agent:relevance-checker` | Relevance checker judged an item's continued relevance |
@@ -148,6 +150,8 @@ The human's manual interventions are the pipeline's training signal. The goal is
 | flex-worker | Any stage is bottlenecked (3+ items) |
 | transcript-reviewer | `transcriptReview.cadence` completed runs have accumulated since its cursor, or a human intervention occurred |
 | agent-improver | `domain:pipeline-improvement` findings/tickets exist (routed here instead of the generic worker) |
+| pipeline-evaluator | `pipelineEvaluation.enabled` is `true` AND any threshold tripped since cursor (`cadence` runs, `minNewLessons` lessons, or `minImproverMerges` merged improvement PRs) |
+| agent-architect | `capability-gap` findings/tickets exist (routed here; requires `pipelineEvaluation.enabled`) |
 | dead-code-remover | `domain:dead-code` findings/tickets exist (routed here instead of the generic worker) |
 
 `code-simplifier` is not in this table — like `declarative-refactor-specialist`, it is **loop-based** (`consumes: loop-tick`), run on its own cadence (`/loop 30m code-simplifier`) rather than dispatched off a queue state.
