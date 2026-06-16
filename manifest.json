@@ -31,47 +31,325 @@
     }
   },
   "agents": {
-    "orchestrator":                   { "stage": "meta",           "requires": ["github"], "optional": ["linear"] },
-    "scanner":                        { "stage": "intake",         "requires": [] },
-    "ticket-creator":                 { "stage": "intake",         "requires": [], "optional": ["linear"] },
-    "ticket-reviewer":                { "stage": "routing",        "requires": [], "optional": ["linear"] },
-    "relevance-checker":              { "stage": "routing",        "requires": [], "optional": ["github", "linear"] },
-    "flex-worker":                    { "stage": "routing",        "requires": ["github"], "optional": ["linear"] },
-    "linear-issue-orchestrator":     { "stage": "routing",        "requires": ["linear"] },
-    "worker":                         { "stage": "implementation", "requires": ["github"], "optional": ["linear"] },
-    "declarative-refactor-specialist":{ "stage": "implementation", "requires": ["github"] },
-    "folder-structure-enforcer":      { "stage": "implementation", "requires": ["github"] },
-    "technical-docs-manager":         { "stage": "implementation", "requires": ["github"] },
-    "branch-updater":                 { "stage": "implementation", "requires": ["github"] },
-    "agent-improver":                 { "stage": "implementation", "requires": ["github"], "optional": ["linear"] },
-    "dead-code-remover":              { "stage": "implementation", "requires": ["github"], "optional": ["linear"] },
-    "code-simplifier":                { "stage": "implementation", "requires": ["github"] },
-    "tester":                         { "stage": "quality",        "requires": ["github"] },
-    "e2e-test-quality":               { "stage": "quality",        "requires": ["github", "playwright"] },
-    "e2e-test-runner":                { "stage": "quality",        "requires": ["playwright"] },
-    "ci-triage":                      { "stage": "quality",        "requires": ["github"] },
-    "data-validator":                 { "stage": "quality",        "requires": ["github"] },
-    "regression-tester":              { "stage": "quality",        "requires": ["github"], "optional": ["playwright", "agent-browser", "chrome-devtools"] },
-    "code-reviewer":                  { "stage": "review",         "requires": ["github"] },
-    "feature-validator":              { "stage": "review",         "requires": ["github", "agent-browser"], "optional": ["linear", "playwright", "chrome-devtools"] },
-    "feedback-responder":             { "stage": "review",         "requires": ["github"] },
-    "cleanup":                        { "stage": "review",         "requires": ["github"] },
-    "a11y-detector":                  { "stage": "detector",       "requires": [], "optional": ["agent-browser", "chrome-devtools"] },
-    "perf-detector":                  { "stage": "detector",       "requires": [], "optional": ["agent-browser", "chrome-devtools"] },
-    "security-detector":              { "stage": "detector",       "requires": [] },
-    "pipeline-violation-detector":   { "stage": "detector",       "requires": [] },
-    "mock-contract-detector":         { "stage": "detector",       "requires": [] },
-    "density-system-detector":        { "stage": "detector",       "requires": [] },
-    "justification-detector":         { "stage": "detector",       "requires": ["github"] },
-    "transcript-reviewer":            { "stage": "improvement",    "requires": [], "optional": ["github", "linear"] },
-    "glossary-maintainer":            { "stage": "utility",        "requires": ["github"] },
-    "context-mapper":                 { "stage": "utility",        "requires": [] },
-    "git-worktree-manager":           { "stage": "utility",        "requires": [] }
+    "orchestrator": {
+      "stage": "meta",
+      "requires": [
+        "github"
+      ],
+      "optional": [
+        "linear"
+      ]
+    },
+    "scanner": {
+      "stage": "intake",
+      "requires": []
+    },
+    "ticket-creator": {
+      "stage": "intake",
+      "requires": [],
+      "optional": [
+        "linear"
+      ]
+    },
+    "ticket-reviewer": {
+      "stage": "routing",
+      "requires": [],
+      "optional": [
+        "linear"
+      ]
+    },
+    "relevance-checker": {
+      "stage": "routing",
+      "requires": [],
+      "optional": [
+        "github",
+        "linear"
+      ]
+    },
+    "flex-worker": {
+      "stage": "routing",
+      "requires": [
+        "github"
+      ],
+      "optional": [
+        "linear"
+      ]
+    },
+    "linear-issue-orchestrator": {
+      "stage": "routing",
+      "requires": [
+        "linear"
+      ]
+    },
+    "worker": {
+      "stage": "implementation",
+      "requires": [
+        "github"
+      ],
+      "optional": [
+        "linear"
+      ]
+    },
+    "declarative-refactor-specialist": {
+      "stage": "implementation",
+      "requires": [
+        "github"
+      ]
+    },
+    "folder-structure-enforcer": {
+      "stage": "implementation",
+      "requires": [
+        "github"
+      ]
+    },
+    "technical-docs-manager": {
+      "stage": "implementation",
+      "requires": [
+        "github"
+      ]
+    },
+    "branch-updater": {
+      "stage": "implementation",
+      "requires": [
+        "github"
+      ]
+    },
+    "agent-improver": {
+      "stage": "implementation",
+      "requires": [
+        "github"
+      ],
+      "optional": [
+        "linear"
+      ]
+    },
+    "dead-code-remover": {
+      "stage": "implementation",
+      "requires": [
+        "github"
+      ],
+      "optional": [
+        "linear"
+      ]
+    },
+    "code-simplifier": {
+      "stage": "implementation",
+      "requires": [
+        "github"
+      ]
+    },
+    "tester": {
+      "stage": "quality",
+      "requires": [
+        "github"
+      ]
+    },
+    "e2e-test-quality": {
+      "stage": "quality",
+      "requires": [
+        "github",
+        "playwright"
+      ]
+    },
+    "e2e-test-runner": {
+      "stage": "quality",
+      "requires": [
+        "playwright"
+      ]
+    },
+    "ci-triage": {
+      "stage": "quality",
+      "requires": [
+        "github"
+      ]
+    },
+    "data-validator": {
+      "stage": "quality",
+      "requires": [
+        "github"
+      ]
+    },
+    "regression-tester": {
+      "stage": "quality",
+      "requires": [
+        "github"
+      ],
+      "optional": [
+        "playwright",
+        "agent-browser",
+        "chrome-devtools"
+      ]
+    },
+    "code-reviewer": {
+      "stage": "review",
+      "requires": [
+        "github"
+      ]
+    },
+    "feature-validator": {
+      "stage": "review",
+      "requires": [
+        "github",
+        "agent-browser"
+      ],
+      "optional": [
+        "linear",
+        "playwright",
+        "chrome-devtools"
+      ]
+    },
+    "feedback-responder": {
+      "stage": "review",
+      "requires": [
+        "github"
+      ]
+    },
+    "cleanup": {
+      "stage": "review",
+      "requires": [
+        "github"
+      ]
+    },
+    "a11y-detector": {
+      "stage": "detector",
+      "requires": [],
+      "optional": [
+        "agent-browser",
+        "chrome-devtools"
+      ]
+    },
+    "perf-detector": {
+      "stage": "detector",
+      "requires": [],
+      "optional": [
+        "agent-browser",
+        "chrome-devtools"
+      ]
+    },
+    "security-detector": {
+      "stage": "detector",
+      "requires": []
+    },
+    "supply-chain-detector": {
+      "stage": "detector",
+      "requires": []
+    },
+    "access-control-detector": {
+      "stage": "detector",
+      "requires": []
+    },
+    "injection-detector": {
+      "stage": "detector",
+      "requires": []
+    },
+    "data-protection-detector": {
+      "stage": "detector",
+      "requires": []
+    },
+    "pipeline-violation-detector": {
+      "stage": "detector",
+      "requires": []
+    },
+    "mock-contract-detector": {
+      "stage": "detector",
+      "requires": []
+    },
+    "density-system-detector": {
+      "stage": "detector",
+      "requires": []
+    },
+    "justification-detector": {
+      "stage": "detector",
+      "requires": [
+        "github"
+      ]
+    },
+    "transcript-reviewer": {
+      "stage": "improvement",
+      "requires": [],
+      "optional": [
+        "github",
+        "linear"
+      ]
+    },
+    "glossary-maintainer": {
+      "stage": "utility",
+      "requires": [
+        "github"
+      ]
+    },
+    "context-mapper": {
+      "stage": "utility",
+      "requires": []
+    },
+    "git-worktree-manager": {
+      "stage": "utility",
+      "requires": []
+    },
+    "ts-suppression-detector": {
+      "path": "agents/detectors/ts-suppression.md",
+      "stage": "detect"
+    },
+    "unjustified-any-detector": {
+      "path": "agents/detectors/unjustified-any.md",
+      "stage": "detect"
+    },
+    "unjustified-eslint-disable-detector": {
+      "path": "agents/detectors/unjustified-eslint-disable.md",
+      "stage": "detect"
+    },
+    "todo-without-ticket-detector": {
+      "path": "agents/detectors/todo-without-ticket.md",
+      "stage": "detect"
+    },
+    "catch-only-console-detector": {
+      "path": "agents/detectors/catch-only-console.md",
+      "stage": "detect"
+    },
+    "server-data-manual-effect-detector": {
+      "path": "agents/detectors/server-data-manual-effect.md",
+      "stage": "detect"
+    },
+    "naming-convention-detector": {
+      "path": "agents/detectors/naming-convention.md",
+      "stage": "detect"
+    },
+    "test-without-assertion-detector": {
+      "path": "agents/detectors/test-without-assertion.md",
+      "stage": "detect"
+    },
+    "skipped-test-without-ticket-detector": {
+      "path": "agents/detectors/skipped-test-without-ticket.md",
+      "stage": "detect"
+    },
+    "unused-export-detector": {
+      "path": "agents/detectors/unused-export.md",
+      "stage": "detect"
+    },
+    "orphaned-module-detector": {
+      "path": "agents/detectors/orphaned-module.md",
+      "stage": "detect"
+    },
+    "commented-out-block-detector": {
+      "path": "agents/detectors/commented-out-block.md",
+      "stage": "detect"
+    },
+    "unreachable-code-detector": {
+      "path": "agents/detectors/unreachable-code.md",
+      "stage": "detect"
+    },
+    "terminology-drift-detector": {
+      "path": "agents/detectors/terminology-drift.md",
+      "stage": "detect"
+    }
   },
   "presets": {
     "minimal": {
       "description": "Stack-agnostic foundational rules only. Works for any project.",
-      "rules": ["agent-work-protocol.md", "justify-non-standard-additions.md"]
+      "rules": [
+        "agent-work-protocol.md",
+        "justify-non-standard-additions.md"
+      ]
     },
     "typescript-react": {
       "description": "TypeScript / React 19+ / Vite / TanStack Query stack. 12 rules covering data-pipeline, react-query, view-models, naming, etc.",
