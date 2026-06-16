@@ -29,10 +29,12 @@ blocked-by:*                   ?    → (waiting — no dispatch)
 ```
 
 Sources:
-- GitHub: `gh pr list` with label filters for PR pipeline states (only open, only ${GH_USER})
+- GitHub: `gh pr list` with label filters for PR pipeline states (only open, only ${GH_USER}, **excluding drafts**). Always request `isDraft` in `--json` and filter `select(.isDraft == false)` (equivalently `--search "draft:false"`) before counting.
 - Linear: query for issues with `pipeline:*` labels for ticket pipeline states
 - Linear backlog: query for Backlog/Todo issues assigned to the owner — these are ready for workers even without `pipeline:needs-work` labels
 - Linear unassigned: query for Backlog/Todo issues with NO assignee on the configured team — many UI tickets land unassigned and are invisible to the pipeline. Workers should self-assign before starting. Filter via `excludeProjects` and `excludeLabels` in `.pipeline/config.json`
+
+**Exclude draft PRs entirely (GitHub mode).** A draft is work-in-progress the owner has explicitly parked — it is not ready for review or merge. Drop every `isDraft: true` PR *before* counting states, *before* the owner-comment scan, and *before* every anomaly/auto-recovery check in §"Anomaly recovery" (label mismatch, conflicts, behind-main, CI-red, label-without-audit, etc.). A draft never counts toward `ready-for-human` (or any pipeline state) and is never a dispatch target — not for branch-updater, conflict-resolver, ci-triage, feedback-responder, or any review agent. It re-enters the pipeline only once the owner marks it ready-for-review. (This matches the per-agent "Skip drafts" filters already in tester/regression-tester/feature-validator/flex-worker; the orchestrator is the one place that was still counting them.)
 
 **The pipeline is NOT idle if there are backlog tickets.** Always dispatch at least one worker when there are actionable backlog tickets (assigned to the owner OR unassigned UI tickets), regardless of how many PRs are in the review queue. New work and review work are independent streams — don't gate one on the other. Workers self-assign unassigned tickets via Linear before starting work.
 
