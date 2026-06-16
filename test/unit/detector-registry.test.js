@@ -1,9 +1,10 @@
 // test/unit/detector-registry.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { validateSync } from '../../scripts/gen-detector.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const registry = JSON.parse(readFileSync(join(root, 'detectors.registry.json'), 'utf8'));
@@ -34,4 +35,14 @@ test('every detector entry has valid required fields', () => {
     assert.ok(d.detect && d.detect.length > 20, `${d.id}: detect description required`);
     assert.ok(d.suggestedFix && d.suggestedFix.length > 10, `${d.id}: suggestedFix required`);
   }
+});
+
+test('every registry detector has a generated agent file and vice versa', () => {
+  const dir = join(root, 'agents', 'detectors');
+  assert.ok(existsSync(dir), 'agents/detectors/ must exist');
+  const fileIds = readdirSync(dir).filter(f => f.endsWith('.md') && f !== '_template.md').map(f => f.replace(/\.md$/, ''));
+  const ids = registry.detectors.map(d => d.id);
+  const { missingFiles, orphanFiles } = validateSync(ids, fileIds);
+  assert.deepEqual(missingFiles, [], `registry ids missing a .md: ${missingFiles}`);
+  assert.deepEqual(orphanFiles, [], `.md files with no registry entry: ${orphanFiles}`);
 });
