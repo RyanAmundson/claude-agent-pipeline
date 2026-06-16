@@ -129,6 +129,11 @@
         "linear"
       ]
     },
+    "pipeline-evaluator": {
+      "stage": "improvement",
+      "requires": [],
+      "optional": ["github", "linear"]
+    },
     "dead-code-remover": {
       "stage": "implementation",
       "requires": [
