@@ -134,6 +134,11 @@
       "requires": [],
       "optional": ["github", "linear"]
     },
+    "agent-architect": {
+      "stage": "implementation",
+      "requires": ["github"],
+      "optional": ["linear"]
+    },
     "dead-code-remover": {
       "stage": "implementation",
       "requires": [
