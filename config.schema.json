@@ -141,6 +141,42 @@
           "description": "GitHub backend: run `gh pr close` on a high-confidence-obsolete PR (reversible). When false, only label/flag it."
         }
       }
+    },
+    "detectors": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-rule detector fleet (detectors.registry.json) + diff-gate tuning. Absent ⇒ defaults apply.",
+      "properties": {
+        "registryPath": {
+          "type": "string",
+          "default": "detectors.registry.json",
+          "description": "Path to the detector registry (single source of truth for the per-rule detector agents)."
+        },
+        "fullSweepEveryNCycles": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "description": "Every N cycles the orchestrator ignores the changed-files cursor and runs all sweep/both detectors across src/, backstopping cursor gaps."
+        },
+        "diffGate": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The needs-detector-gate stage that runs matched diff-mode detectors on a PR's changed lines.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "When false, code-reviewer advances straight past needs-detector-gate with no detector panel."
+            }
+          }
+        }
+      }
+    },
+    "maxAutoFixDiffLines": {
+      "type": "integer",
+      "default": 150,
+      "minimum": 1,
+      "description": "Soft ceiling on changed lines for an auto-fix PR. The worker splits or flags `needs-split` rather than open a larger PR, keeping each PR tiny and revertible."
     }
   }
 }

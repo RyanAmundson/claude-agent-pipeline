@@ -21,6 +21,7 @@ pipeline:needs-review          ?    → dispatch ticket-reviewer
 pipeline:needs-work            ?    → dispatch worker
 pipeline:needs-test-review     ?    → dispatch tester
 pipeline:needs-code-review     ?    → dispatch code-reviewer
+pipeline:needs-detector-gate   ?    → run runner/detector-gate.js (diff-mode detector panel)
 pipeline:needs-regression-check   ?    → dispatch regression-tester
 pipeline:needs-feature-validation ?    → dispatch feature-validator
 pipeline:needs-feedback        ?    → dispatch feedback-responder
@@ -70,6 +71,7 @@ Dispatch mapping:
 | `pipeline:needs-work` | worker | `.agents/worker.md` |
 | `pipeline:needs-test-review` | tester | `.agents/tester.md` |
 | `pipeline:needs-code-review` | code-reviewer | `.agents/code-reviewer.md` |
+| `pipeline:needs-detector-gate` (only when `config.detectors.diffGate.enabled`, default true) | `runner/detector-gate.js` (diff-mode detector fan-out) | — |
 | `pipeline:needs-regression-check` | regression-tester | `.agents/regression-tester.md` |
 | `pipeline:needs-feature-validation` | feature-validator | `.agents/feature-validator.md` |
 | `pipeline:needs-feedback` | feedback-responder | `.agents/feedback-responder.md` |
@@ -96,6 +98,8 @@ Dispatch mapping:
 | PR merged touching logging/telemetry, cookie/session config, or response-header/CSP/CORS config, or adding an external `<script>`/`<link>` | data-protection-detector | — |
 
 For stages with multiple items, dispatch multiple agents of the same role — each works a different item.
+
+- **`pipeline:needs-detector-gate`** (only when `config.detectors.diffGate.enabled`, default true): trigger `runner/detector-gate.js` for the PR. It fans out the diff-mode detectors whose glob+prefilter match the PR's changed files, persists `.pipeline/reviews/<pr>/detector-*.json`, and computes the severity gate: any `blocker`/`major` (or any `veto`) → re-label `pipeline:needs-feedback` (feedback-responder consumes it); otherwise advance to the next state (`pipeline:needs-regression-check`, or `pipeline:ready-for-human` if the regression/feature gates are disabled). When `diffGate.enabled` is false, `code-reviewer` advances straight past this state with no panel.
 
 ### 3.5. Self-Audit (every cycle)
 
