@@ -31,6 +31,7 @@ export const STATES = Object.freeze([
   'in-progress',
   'needs-test-review',
   'needs-code-review',
+  'needs-detector-gate',
   'needs-regression-check',
   'needs-feature-validation',
   'needs-feedback',
