@@ -123,7 +123,11 @@ stateDiagram-v2
     Tester --> CodeReviewer : test-review
     E2eTestQuality --> E2eTestRunner : e2e-spec
     E2eTestRunner --> [*] : test-report
-    CodeReviewer --> [*] : ready-for-human
+    CodeReviewer --> RegressionTester : needs-regression-check
+    RegressionTester --> FeatureValidator : needs-feature-validation
+    FeatureValidator --> [*] : ready-for-human
+    RegressionTester --> FeedbackResponder : needs-feedback
+    FeatureValidator --> FeedbackResponder : needs-feedback
     [*] --> Cleanup : pr-merged
 
     state "UTILITIES" as Stage_utilities {

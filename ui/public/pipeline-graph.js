@@ -2,7 +2,7 @@
 // No DOM — importable in Node (unit tests) and the browser (pipeline.js).
 
 // SVG canvas; used as the <svg> viewBox. Coordinates below are tunable.
-export const VIEW = { w: 1120, h: 560 };
+export const VIEW = { w: 1260, h: 560 };
 
 // Each node has a center (x, y). `kind` drives styling. `agent` is the owning
 // agent shown beneath the node. `state` (when present) is the queue state whose
@@ -11,24 +11,24 @@ export const VIEW = { w: 1120, h: 560 };
 // the backlog/park it pulls from — e.g. workers count at `in-progress`, not the
 // `needs-work` queue; the reviewer at `needs-review`, not the `needs-info` park.
 export const NODES = {
-  scanner:             { label: 'scan',        agent: 'scanner',            x: 70,   y: 250, kind: 'entry' },
-  'needs-triage':      { label: 'triage',      agent: 'ticket-creator',     x: 210,  y: 250, kind: 'state', state: 'needs-triage' },
-  'needs-review':      { label: 'review',      agent: 'ticket-reviewer',    x: 340,  y: 250, kind: 'state', state: 'needs-review' },
-  'needs-work':        { label: 'work',        agent: 'worker',             x: 470,  y: 250, kind: 'state', state: 'needs-work', agentHome: false },
-  'in-progress':       { label: 'in-progress', agent: 'worker',             x: 600,  y: 250, kind: 'state', state: 'in-progress' },
-  'needs-test-review': { label: 'test',        agent: 'tester',             x: 730,  y: 250, kind: 'state', state: 'needs-test-review' },
-  'needs-code-review': { label: 'code-review', agent: 'code-reviewer',      x: 870,  y: 250, kind: 'state', state: 'needs-code-review' },
-  'ready-for-human':   { label: 'ready',       agent: null,                 x: 1010, y: 250, kind: 'state', state: 'ready-for-human' },
-  human:               { label: '\u{1F464} human', agent: null,             x: 1010, y: 110, kind: 'human' },
-  done:                { label: 'done',        agent: 'cleanup',            x: 1010, y: 410, kind: 'exit',  state: 'done' },
-  'needs-feedback':    { label: 'feedback',    agent: 'feedback-responder', x: 800,  y: 410, kind: 'state', state: 'needs-feedback' },
-  'needs-info':        { label: 'needs-info',  agent: 'ticket-reviewer',    x: 340,  y: 410, kind: 'park',  state: 'needs-info', agentHome: false },
-  obsolete:            { label: 'obsolete',    agent: 'relevance-checker',  x: 470,  y: 410, kind: 'exit',  state: 'obsolete' },
-  // chrome: off-path agents (no state → no count badge). orchestrator pulses
-  // when an orchestrator run is active; the feeders flow findings into triage.
-  orchestrator:        { label: 'orchestrator', agent: 'orchestrator',      x: 560,  y: 40,  kind: 'meta' },
-  detectors:           { label: 'detectors ⟳', agent: null,            x: 70,   y: 120, kind: 'feeder' },
-  utility:             { label: 'utility ⛭',   agent: null,            x: 210,  y: 120, kind: 'feeder' },
+  scanner:                  { label: 'scan',        agent: 'scanner',            x: 70,   y: 250, kind: 'entry' },
+  'needs-triage':           { label: 'triage',      agent: 'ticket-creator',     x: 190,  y: 250, kind: 'state', state: 'needs-triage' },
+  'needs-review':           { label: 'review',      agent: 'ticket-reviewer',    x: 310,  y: 250, kind: 'state', state: 'needs-review' },
+  'needs-work':             { label: 'work',        agent: 'worker',             x: 430,  y: 250, kind: 'state', state: 'needs-work', agentHome: false },
+  'in-progress':            { label: 'in-progress', agent: 'worker',             x: 550,  y: 250, kind: 'state', state: 'in-progress' },
+  'needs-test-review':      { label: 'test',        agent: 'tester',             x: 670,  y: 250, kind: 'state', state: 'needs-test-review' },
+  'needs-code-review':      { label: 'code-review', agent: 'code-reviewer',      x: 790,  y: 250, kind: 'state', state: 'needs-code-review' },
+  'needs-regression-check': { label: 'regression',  agent: 'regression-tester',  x: 910,  y: 250, kind: 'state', state: 'needs-regression-check' },
+  'needs-feature-validation':{ label: 'validate',   agent: 'feature-validator',  x: 1030, y: 250, kind: 'state', state: 'needs-feature-validation' },
+  'ready-for-human':        { label: 'ready',       agent: null,                 x: 1150, y: 250, kind: 'state', state: 'ready-for-human' },
+  human:                    { label: '\u{1F464} human', agent: null,             x: 1150, y: 110, kind: 'human' },
+  done:                     { label: 'done',        agent: 'cleanup',            x: 1150, y: 410, kind: 'exit',  state: 'done' },
+  'needs-feedback':         { label: 'feedback',    agent: 'feedback-responder', x: 850,  y: 410, kind: 'state', state: 'needs-feedback' },
+  'needs-info':             { label: 'needs-info',  agent: 'ticket-reviewer',    x: 310,  y: 410, kind: 'park',  state: 'needs-info', agentHome: false },
+  obsolete:                 { label: 'obsolete',    agent: 'relevance-checker',  x: 430,  y: 410, kind: 'exit',  state: 'obsolete' },
+  orchestrator:             { label: 'orchestrator', agent: 'orchestrator',      x: 600,  y: 40,  kind: 'meta' },
+  detectors:                { label: 'detectors ⟳', agent: null,            x: 70,   y: 120, kind: 'feeder' },
+  utility:                  { label: 'utility ⛭',   agent: null,            x: 190,  y: 120, kind: 'feeder' },
 };
 
 // Edges. `bend` offsets the bezier control point perpendicular to the chord
@@ -40,8 +40,10 @@ export const EDGES = [
   { id: 'spine:work',        from: 'needs-review',      to: 'needs-work',        kind: 'spine',   bend: 0 },
   { id: 'spine:inprogress',  from: 'needs-work',        to: 'in-progress',       kind: 'spine',   bend: 0 },
   { id: 'spine:test',        from: 'in-progress',       to: 'needs-test-review', kind: 'spine',   bend: 0 },
-  { id: 'spine:codereview',  from: 'needs-test-review', to: 'needs-code-review', kind: 'spine',   bend: 0 },
-  { id: 'spine:ready',       from: 'needs-code-review', to: 'ready-for-human',   kind: 'spine',   bend: 0 },
+  { id: 'spine:codereview',  from: 'needs-test-review', to: 'needs-code-review',      kind: 'spine',   bend: 0 },
+  { id: 'spine:regression',  from: 'needs-code-review', to: 'needs-regression-check', kind: 'spine',   bend: 0 },
+  { id: 'spine:featureval',  from: 'needs-regression-check', to: 'needs-feature-validation', kind: 'spine', bend: 0 },
+  { id: 'spine:ready',       from: 'needs-feature-validation', to: 'ready-for-human', kind: 'spine',   bend: 0 },
   // human handoff <-> re-entry
   { id: 'handoff:human',     from: 'ready-for-human',   to: 'human',             kind: 'exit',    bend: 0 },
   { id: 'merge:done',        from: 'human',             to: 'done',              kind: 'exit',    bend: 40 },
@@ -49,6 +51,8 @@ export const EDGES = [
   // review-fail loop
   { id: 'fail:test',         from: 'needs-test-review', to: 'needs-feedback',    kind: 'loop',    bend: 50 },
   { id: 'fail:codereview',   from: 'needs-code-review', to: 'needs-feedback',    kind: 'loop',    bend: 30 },
+  { id: 'fail:regression',   from: 'needs-regression-check',   to: 'needs-feedback', kind: 'loop', bend: 20 },
+  { id: 'fail:featureval',   from: 'needs-feature-validation', to: 'needs-feedback', kind: 'loop', bend: 10 },
   { id: 'feedback:rereview', from: 'needs-feedback',    to: 'needs-code-review', kind: 'loop',    bend: -40 },
   // park <-> resume
   { id: 'park:info',         from: 'needs-review',      to: 'needs-info',        kind: 'park',    bend: 0 },
@@ -70,6 +74,8 @@ export const EDGES = [
   { id: 'dispatch:in-progress',       from: 'orchestrator', to: 'in-progress',       kind: 'dispatch', bend: 0 },
   { id: 'dispatch:needs-test-review', from: 'orchestrator', to: 'needs-test-review', kind: 'dispatch', bend: 20 },
   { id: 'dispatch:needs-code-review', from: 'orchestrator', to: 'needs-code-review', kind: 'dispatch', bend: 30 },
+  { id: 'dispatch:needs-regression-check',  from: 'orchestrator', to: 'needs-regression-check',  kind: 'dispatch', bend: 35 },
+  { id: 'dispatch:needs-feature-validation', from: 'orchestrator', to: 'needs-feature-validation', kind: 'dispatch', bend: 45 },
   { id: 'dispatch:needs-feedback',    from: 'orchestrator', to: 'needs-feedback',    kind: 'dispatch', bend: 40 },
   { id: 'dispatch:done',              from: 'orchestrator', to: 'done',              kind: 'dispatch', bend: 60 },
 ];
@@ -263,6 +269,8 @@ export const STAGES = [
   { node: 'in-progress',       queue: 'needs-work' },
   { node: 'needs-test-review', queue: 'needs-test-review' },
   { node: 'needs-code-review', queue: 'needs-code-review' },
+  { node: 'needs-regression-check',   queue: 'needs-regression-check' },
+  { node: 'needs-feature-validation', queue: 'needs-feature-validation' },
   { node: 'needs-feedback',    queue: 'needs-feedback' },
   { node: 'done',              queue: 'done' },
 ];

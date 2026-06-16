@@ -53,7 +53,7 @@ echo "budget:  \$$AP_BUDGET"
 cmd "agent-pipeline install $TARGET --quiet"
 $AP_BIN install "$TARGET" --quiet >/dev/null
 
-mkdir -p "$TARGET/.pipeline/queue"/{needs-triage,needs-review,needs-work,in-progress,needs-test-review,needs-code-review,needs-feedback,ready-for-human,done,needs-info}
+mkdir -p "$TARGET/.pipeline/queue"/{needs-triage,needs-review,needs-work,in-progress,needs-test-review,needs-code-review,needs-regression-check,needs-feature-validation,needs-feedback,ready-for-human,done,needs-info}
 mkdir -p "$TARGET/src"
 cat > "$TARGET/src/sample.js" <<'JS'
 async function loadConfig() {

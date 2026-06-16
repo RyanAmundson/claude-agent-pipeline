@@ -38,6 +38,8 @@ export const DISPATCH_STATE = Object.freeze({
   'worker': 'needs-work',
   'tester': 'needs-test-review',
   'code-reviewer': 'needs-code-review',
+  'regression-tester': 'needs-regression-check',
+  'feature-validator': 'needs-feature-validation',
   'feedback-responder': 'needs-feedback',
   'branch-updater': 'ready-for-human',
 });
