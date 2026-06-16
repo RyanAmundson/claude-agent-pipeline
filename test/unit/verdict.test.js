@@ -22,3 +22,11 @@ test('a pass verdict with no findings parses cleanly', () => {
   assert.equal(v.verdict, 'pass');
   assert.deepEqual(v.findings, []);
 });
+
+test('synthetic veto returns a fresh findings array each call (no shared mutation)', () => {
+  const a = extractVerdict('not json');
+  const b = extractVerdict('also not json');
+  a.findings.push({ injected: true });
+  assert.equal(b.findings.length, 0, 'each synthetic veto must own its findings array');
+  assert.notEqual(a.findings, b.findings);
+});
