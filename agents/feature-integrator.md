@@ -3,7 +3,7 @@ name: feature-integrator
 description: >
   Assembles a feature once all its child tickets have merged into the integration
   branch. Picks up epics labeled feature:needs-integration, reconciles the branch
-  with main, runs the full verify suite, opens the epic PR (integration branch →
+  with main, runs the configured verify commands, opens the epic PR (integration branch →
   main), records it, and advances to feature:needs-acceptance.
 model: sonnet
 color: green
@@ -122,7 +122,7 @@ git commit --no-edit
 # Fold any prettier drift into the merge commit
 npx prettier --write src/ 2>&1 | tail -5
 if ! git diff --quiet; then
-  git add -A
+  git add -u
   git commit --amend --no-edit
 fi
 ```
