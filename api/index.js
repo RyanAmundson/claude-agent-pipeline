@@ -46,6 +46,22 @@ export const STATES = Object.freeze([
   'obsolete',
 ]);
 
+// Feature-pipeline states (parallel to STATES). Tracked as ordinary tickets in
+// the same queue layout (queueDir/<state>/), surfaced through readSnapshot so the
+// dashboard's features tab consumes the same data. Empty until the feature
+// pipeline backend (spec-only today) writes tickets here.
+export const FEATURE_STATES = Object.freeze([
+  'feature:needs-spec',
+  'feature:needs-design',
+  'feature:needs-decomposition',
+  'feature:building',
+  'feature:needs-integration',
+  'feature:needs-acceptance',
+  'feature:ready-for-human',
+  'feature:blocked',
+  'feature:needs-feedback',
+]);
+
 const ACTIVE_STATE = 'in-progress';
 
 function queueDir(target) {
@@ -132,6 +148,12 @@ export function readSnapshot(opts) {
     for (const t of list) ticketsById[t.id] = t;
   }
 
+  for (const state of FEATURE_STATES) {
+    const list = readTicketsInState(target, state);
+    ticketsByState[state] = list.map(({ _state, ...t }) => t);
+    for (const t of list) ticketsById[t.id] = t;
+  }
+
   const liveRuns = listRuns({ target });
 
   // Latest orchestrator cycle (backend-neutral telemetry). On non-filesystem
@@ -165,6 +187,7 @@ export function readSnapshot(opts) {
     target,
     generatedAt: new Date().toISOString(),
     states: STATES,
+    featureStates: FEATURE_STATES,
     agents,
     tickets: { byState: ticketsByState, count: Object.keys(ticketsById).length },
     runs: {
