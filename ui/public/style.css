@@ -75,15 +75,27 @@ main {
 .line.type-system .body { color: var(--dim); }
 .line.type-user .body { color: var(--dim); }
 
-/* ─── view toggling (3 panels) ───────────────────────────────────────── */
+/* ─── view toggling (4 panels) ───────────────────────────────────────── */
 body[data-view="log"]      #pipeline,
 body[data-view="log"]      #agents,
+body[data-view="log"]      #features,
 body[data-view="agents"]   #pipeline,
 body[data-view="agents"]   #log,
+body[data-view="agents"]   #features,
 body[data-view="pipeline"] #log,
-body[data-view="pipeline"] #agents { display: none; }
+body[data-view="pipeline"] #agents,
+body[data-view="pipeline"] #features,
+body[data-view="features"] #pipeline,
+body[data-view="features"] #log,
+body[data-view="features"] #agents { display: none; }
 
 body:not([data-view="log"]) .log-only { display: none; }
+
+/* ─── features drill-in panel ────────────────────────────────────────── */
+.feature-drill { margin: 0.5rem 0; padding: 0.5rem; border: 1px solid var(--line); border-radius: 6px; }
+.feature-epic { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.25rem 0; }
+.feature-epic-id { font-weight: 600; margin-right: 0.35rem; }
+.feature-child-chip { font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
 
 /* ─── agents reference ───────────────────────────────────────────────── */
 #agents {
