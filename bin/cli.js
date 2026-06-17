@@ -43,6 +43,8 @@ Usage:
                                               Subscribe to live pipeline events (JSONL on stdout)
   agent-pipeline run <agent> --prompt "..." [--target <p>] [--wait|--detach] [--json]
                                               Dispatch a single agent run (default: stream JSONL)
+  agent-pipeline feature "<intent>" [--target <p>] [--json]
+                                              Create a new feature epic (feature pipeline) from a rough intent
   agent-pipeline runs [list] [--target <p>] [--json]
                                               List active + recent agent runs
   agent-pipeline runs <runId> [--target <p>] [--wait|--follow] [--json]
@@ -349,6 +351,7 @@ switch (cmd) {
   case 'agent':  runAgent(positional, flags); break;
   case 'events': runEvents(flags); break;
   case 'run':    runRun(positional, flags); break;
+  case 'feature': runFeature(positional, flags); break;
   case 'runs':   runRuns(positional, flags); break;
   case 'cycle':  runCycle(positional, flags); break;
   case 'orchestrator': runOrchestrator(positional, flags); break;
@@ -395,6 +398,30 @@ function runComment(positional, flags) {
   } catch (err) {
     process.exit(err.status || 1);
   }
+}
+
+async function runFeature(positional, flags) {
+  if (positional.length !== 1) die(`Usage: agent-pipeline feature "<intent>" [--target <p>] [--json]`);
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const { nextEpicId, epicsDir } = await import('../api/epics.js');
+  const target = targetOf(flags);
+  const intent = positional[0].trim();
+  if (!intent) die(`feature: intent must not be empty`);
+  const id = nextEpicId(target);
+  const now = new Date().toISOString();
+  const epic = {
+    id, title: intent.split('\n')[0].slice(0, 120), intent,
+    spec: null, design: null, acceptance: [],
+    integration_branch: null, children: [], pr_url: null,
+    created_at: now, updated_at: now,
+  };
+  const dir = join(epicsDir(target), 'needs-spec');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${id}.json`), JSON.stringify(epic, null, 2));
+  if (flags.json) { console.log(JSON.stringify(epic, null, 2)); return; }
+  console.log(`Created ${id} in feature:needs-spec`);
+  console.log(`  ${epic.title}`);
+  console.log(`  The orchestrator will dispatch feature-spec-writer on its next cycle.`);
 }
 
 async function runUi(flags) {
