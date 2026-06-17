@@ -40,12 +40,13 @@ test('an unmodeled move returns an empty path', () => {
 const SNAP = {
   epics: { byState: {
     'needs-spec': [{ id: 'EPIC-002' }],
-    'building': [{ id: 'EPIC-001', children: ['EPIC-001-1', 'EPIC-001-2', 'EPIC-001-3'] }],
+    'building': [{ id: 'EPIC-001', children: ['EPIC-001-1', 'EPIC-001-2', 'EPIC-001-3', 'EPIC-001-4'] }],
   } },
   tickets: { byState: {
     'needs-work': [{ id: 'EPIC-001-3', epic: 'EPIC-001' }],
     'needs-code-review': [{ id: 'EPIC-001-2', epic: 'EPIC-001' }],
     'done': [{ id: 'EPIC-001-1', epic: 'EPIC-001' }, { id: 'TKT-900' }],
+    'ready-for-human': [{ id: 'EPIC-001-4', epic: 'EPIC-001' }],
   } },
 };
 
@@ -66,9 +67,10 @@ test('applyEpicEvent move reassigns an epic state', () => {
 
 test('childProgress groups an epic\'s children by their ticket state, ignoring non-children', () => {
   const p = childProgress(SNAP, 'EPIC-001');
-  assert.equal(p.total, 3);
+  assert.equal(p.total, 4);
   assert.equal(p.byState['needs-work'], 1);
   assert.equal(p.byState['needs-code-review'], 1);
   assert.equal(p.byState['done'], 1);
-  assert.equal(p.ready, 1);          // children in done
+  assert.equal(p.byState['ready-for-human'], 1);
+  assert.equal(p.ready, 2);          // children in done + ready-for-human
 });

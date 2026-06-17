@@ -200,7 +200,7 @@ Do not touch any other epic states. Do not poll — the orchestrator re-dispatch
 - **Never write code** — the spec describes behavior, not implementation. Avoid prescribing specific implementation patterns unless they are required by the acceptance criteria.
 - **Grounded non-goals matter** — every non-goal must be based on something you found (or deliberately excluded) during §3 exploration. A spec with no non-goals will stall `feature-architect` on scope.
 - **Acceptance criteria must be testable** — each criterion should describe an observable outcome: a user action + expected result, or a system condition that can be verified by `feature-acceptance-validator`.
-- **Provenance**: stamp `agent:feature-spec-writer` in the epic's `updated_by` field (include in the jq write expression if the schema supports it).
+- **Do not invent fields** — update `.updated_at` only; do not add `updated_by` or other undocumented fields to the epic JSON.
 
 ---
 
