@@ -10,6 +10,8 @@ import {
   backPressureByNode, provisioningEvents, dispatchEdgeId,
 } from './pipeline-graph.js';
 import { colorForAgent } from './colors.js';
+import { buildStaticGraph } from './graph-render.js';
+import { META_NODES, META_EDGES } from './metaloop-graph.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -109,6 +111,19 @@ function buildGraph() {
   nodeLayer.append(legend);
 
   svg.append(edgeLayer, tokenLayer, nodeLayer);
+
+  // Self-improvement band: appended into the same SVG beneath the spine.
+  buildStaticGraph(svg, { nodes: META_NODES, edges: META_EDGES });
+  // Connector spanning both graphs: findings flow up into the spine's triage.
+  // Use a dedicated layer so it can't collide with the spine's own edge layer.
+  const combined = { ...NODES, ...META_NODES };
+  const connectorLayer = el('g', { class: 'pl-connectors' });
+  connectorLayer.append(el('path', {
+    class: 'pl-edge kind-feed',
+    d: pathFor({ from: 'findings', to: 'needs-triage', bend: 80 }, combined),
+    'data-edge': 'meta:into-triage',
+  }));
+  svg.append(connectorLayer);
   return true;
 }
 

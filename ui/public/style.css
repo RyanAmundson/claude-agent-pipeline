@@ -227,6 +227,7 @@ body:not([data-view="log"]) .log-only { display: none; }
 .pl-edge.kind-park    { stroke: var(--dim); stroke-dasharray: 2 3; opacity: 0.6; }
 .pl-edge.kind-regen   { stroke: var(--dim); stroke-dasharray: 1 5; opacity: 0.35; }
 .pl-edge.kind-feed    { stroke: var(--dim); stroke-dasharray: 1 4; opacity: 0.3; }
+.pl-edge.kind-feedback { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 2 5; opacity: 0.6; fill: none; }
 /* orchestrator dispatch lines: invisible until the orchestrator provisions an
    agent at that stage, then the line lights green for the token's travel. */
 .pl-edge.kind-dispatch        { stroke: var(--ok); stroke-dasharray: 2 5; opacity: 0; }
