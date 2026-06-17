@@ -70,3 +70,32 @@ test('diffEpicIndexes detects upsert, move, and remove', () => {
   assert.equal(evs[0].to, 'needs-design');
   rmSync(target, { recursive: true, force: true });
 });
+
+test('diffEpicIndexes includes top-level id in epic.upsert for new epic', () => {
+  const target = tmpTarget();
+  const prev = indexEpics(target);
+  // create a new epic
+  writeEpic(target, 'needs-spec', { id: 'EPIC-001', title: 'new epic' });
+  const next = indexEpics(target);
+  const evs = diffEpicIndexes(prev, next);
+  assert.equal(evs.length, 1);
+  assert.equal(evs[0].type, 'epic.upsert');
+  assert.equal(evs[0].id, 'EPIC-001');
+  assert.equal(evs[0].state, 'needs-spec');
+  rmSync(target, { recursive: true, force: true });
+});
+
+test('diffEpicIndexes detects epic.remove with correct id and state', () => {
+  const target = tmpTarget();
+  writeEpic(target, 'building', { id: 'EPIC-002', title: 'removable' });
+  const prev = indexEpics(target);
+  // remove the epic file
+  rmSync(join(epicsDir(target), 'building', 'EPIC-002.json'));
+  const next = indexEpics(target);
+  const evs = diffEpicIndexes(prev, next);
+  assert.equal(evs.length, 1);
+  assert.equal(evs[0].type, 'epic.remove');
+  assert.equal(evs[0].id, 'EPIC-002');
+  assert.equal(evs[0].state, 'building');
+  rmSync(target, { recursive: true, force: true });
+});

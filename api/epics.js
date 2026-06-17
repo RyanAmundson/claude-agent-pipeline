@@ -110,9 +110,9 @@ export function diffEpicIndexes(prev, next) {
   const events = [];
   for (const [id, cur] of next) {
     const old = prev.get(id);
-    if (!old) events.push({ type: 'epic.upsert', state: cur.state, epic: cur.epic });
+    if (!old) events.push({ type: 'epic.upsert', id, state: cur.state, epic: cur.epic });
     else if (old.state !== cur.state) events.push({ type: 'epic.move', id, from: old.state, to: cur.state, epic: cur.epic });
-    else if (old.hash !== cur.hash || old.mtimeMs !== cur.mtimeMs) events.push({ type: 'epic.upsert', state: cur.state, epic: cur.epic });
+    else if (old.hash !== cur.hash || old.mtimeMs !== cur.mtimeMs) events.push({ type: 'epic.upsert', id, state: cur.state, epic: cur.epic });
   }
   for (const [id, old] of prev) {
     if (!next.has(id)) events.push({ type: 'epic.remove', id, state: old.state });
