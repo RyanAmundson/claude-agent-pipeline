@@ -21,6 +21,7 @@ pipeline:needs-review          ?    → dispatch ticket-reviewer
 pipeline:needs-work            ?    → dispatch worker
 pipeline:needs-test-review     ?    → dispatch tester
 pipeline:needs-code-review     ?    → dispatch code-reviewer
+pipeline:needs-detector-gate   ?    → run runner/detector-gate.js (diff-mode detector panel)
 pipeline:needs-regression-check   ?    → dispatch regression-tester
 pipeline:needs-feature-validation ?    → dispatch feature-validator
 pipeline:needs-feedback        ?    → dispatch feedback-responder
@@ -71,6 +72,7 @@ Dispatch mapping:
 | `pipeline:needs-work` | worker | `.agents/worker.md` |
 | `pipeline:needs-test-review` | tester | `.agents/tester.md` |
 | `pipeline:needs-code-review` | code-reviewer | `.agents/code-reviewer.md` |
+| `pipeline:needs-detector-gate` (only when `config.detectors.diffGate.enabled`, default true) | `runner/detector-gate.js` (diff-mode detector fan-out) | — |
 | `pipeline:needs-regression-check` | regression-tester | `.agents/regression-tester.md` |
 | `pipeline:needs-feature-validation` | feature-validator | `.agents/feature-validator.md` |
 | `pipeline:needs-feedback` | feedback-responder | `.agents/feedback-responder.md` |
@@ -98,6 +100,8 @@ Dispatch mapping:
 | PR merged touching logging/telemetry, cookie/session config, or response-header/CSP/CORS config, or adding an external `<script>`/`<link>` | data-protection-detector | — |
 
 For stages with multiple items, dispatch multiple agents of the same role — each works a different item.
+
+- **`pipeline:needs-detector-gate`** (only when `config.detectors.diffGate.enabled`, default true): trigger `runner/detector-gate.js` for the PR. It fans out the diff-mode detectors whose glob+prefilter match the PR's changed files, persists `.pipeline/reviews/<pr>/detector-*.json`, and computes the severity gate: any `blocker`/`major` (or any `veto`) → re-label `pipeline:needs-feedback` (feedback-responder consumes it); otherwise advance to the next state (`pipeline:needs-regression-check`, or `pipeline:ready-for-human` if the regression/feature gates are disabled). When `diffGate.enabled` is false, `code-reviewer` advances straight past this state with no panel.
 
 ### 3.5. Self-Audit (every cycle)
 
@@ -183,7 +187,13 @@ The feedback-responder is on-demand like other agents, but has an additional tri
 These agents don't have their own loops — the orchestrator dispatches them on a cadence:
 
 - **Specialized detectors** (a11y, perf, pipeline-violation, mock-contract, density-system, justification, security, supply-chain, access-control, injection, data-protection): Dispatch per the table above. **Security runs every cycle.** The other ten rotate round-robin — one per cycle — using this state: the last dispatched detector's name is in `.pipeline/runs/cycles.jsonl` (the last entry's `dispatched` list) or can be derived from finding filenames (most recent file in `.pipeline/findings/` tells you what just ran). Pick the next in the rotation: `a11y → perf → pipeline-violation → mock-contract → density-system → justification → supply-chain → access-control → injection → data-protection → a11y`. Note: `justification-detector` also runs in PR-mode whenever a PR enters `pipeline:needs-code-review` (see dispatch table) — its sweep-mode round-robin slot is for codebase-wide pattern findings only. The four security-slice detectors (supply-chain, access-control, injection, data-protection) carve distinct surfaces out of `security-detector`, which now focuses on inline secrets, DOM-XSS, and postMessage — so they don't double-file against each other or against security.
-- **General scanner (catch-all)**: Dispatch once per ~5 cycles ONLY for things the specialized detectors don't cover (dead code, test quality, outdated patterns, terminology drift). Instruct the scanner to SKIP anything the specialized detectors would find — pass it the list of detector responsibilities. Still respect the same 25-PR saturation backoff.
+- **Registry detectors (glob-matched sweep)**: The per-rule detectors in `detectors.registry.json` are dispatched by changed files, not round-robin. Each cycle:
+  1. Compute changed files since the last scan cursor: `git diff --name-only <lastScan>..main` (the cursor is the commit SHA recorded in `.pipeline/runs/last-scan` after the previous sweep).
+  2. Load `detectors.registry.json`; using the same glob + prefilter logic as `runner/detector-match.js`, find detectors (`mode` = `sweep` or `both`) whose glob matches a changed file AND whose `prefilterPattern` appears in it.
+  3. Dispatch ONLY those detectors in sweep-mode against the matched files (subject to the existing `maxAgentsPerCycle` cap and the 25-PR saturation backoff).
+  4. After the sweep, write the current `main` SHA to `.pipeline/runs/last-scan`.
+- **Periodic full sweep**: Every `config.detectors.fullSweepEveryNCycles` (default 20) cycles, ignore the cursor and run all `sweep`/`both` registry detectors whose prefilter matches anywhere under their glob in `src/`. This backstops detectors added since the last cursor and any cursor gaps.
+- **General scanner is retired as a catch-all** — see the frontier-scanner role in `agents/scanner.md`; dispatch it only per its own (reduced) trigger.
 - **Detector saturation backoff**: if `pipeline:ready-for-human` has **≥ 25 open PRs**, skip ALL detectors (including security) for that cycle — the owner is the bottleneck and piling on new findings makes it worse. Below 25, dispatch per schedule. Exception: never skip security if a critical finding was escalated in the previous cycle and is still unremediated.
 - **cleanup**: Dispatch if any PRs have been merged since the last cleanup, or if there are stale worktrees/branches/labels to audit.
 

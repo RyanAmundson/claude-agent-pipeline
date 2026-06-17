@@ -1,0 +1,173 @@
+{
+  "$comment": "Single source of truth for per-rule detectors. agents/detectors/<id>.md is generated from this by scripts/gen-detector.js. severity is the default for sweep findings; diff-mode findings carry their own per-instance severity.",
+  "detectors": [
+    {
+      "id": "ts-suppression",
+      "title": "Unjustified TypeScript suppression",
+      "glob": "src/**/*.{ts,tsx}",
+      "prefilterPattern": "@ts-(nocheck|ignore|expect-error)",
+      "model": "haiku",
+      "mode": "both",
+      "severity": "major",
+      "routesTo": "ticket-creator",
+      "detect": "A `@ts-nocheck`, `@ts-ignore`, or `@ts-expect-error` comment that has NO justification comment on the same or adjacent line explaining why the suppression is necessary. A suppression WITH a clear written reason is NOT a finding.",
+      "suggestedFix": "Remove the suppression and fix the underlying type error, or add a one-line justification comment explaining why the suppression is unavoidable."
+    },
+    {
+      "id": "unjustified-any",
+      "title": "Unjustified `any`",
+      "glob": "src/**/*.{ts,tsx}",
+      "prefilterPattern": "\\bas any\\b|:\\s*any\\b|<any>",
+      "model": "haiku",
+      "mode": "both",
+      "severity": "major",
+      "routesTo": "ticket-creator",
+      "detect": "An `any` type — `as any`, `: any`, or `<any>` — with no adjacent justification comment. Ignore `any` in `.d.ts` ambient declarations and in third-party type shims. A cast to `any` immediately narrowed back to a real type on the next line is still a finding.",
+      "suggestedFix": "Replace `any` with the real type, `unknown` + a type guard, or a generic. If genuinely unavoidable, add a justification comment."
+    },
+    {
+      "id": "unjustified-eslint-disable",
+      "title": "Unjustified eslint-disable",
+      "glob": "src/**/*.{ts,tsx,js,jsx}",
+      "prefilterPattern": "eslint-disable",
+      "model": "haiku",
+      "mode": "both",
+      "severity": "minor",
+      "routesTo": "ticket-creator",
+      "detect": "An `eslint-disable` or `eslint-disable-next-line` directive with no trailing comment explaining why the rule is being disabled. A disable WITH a written reason is NOT a finding. A bare `eslint-disable` (whole-file, no rule named) is always a finding.",
+      "suggestedFix": "Fix the lint violation, or name the specific rule and add a justification after the directive."
+    },
+    {
+      "id": "todo-without-ticket",
+      "title": "TODO without a ticket reference",
+      "glob": "src/**/*.{ts,tsx,js,jsx}",
+      "prefilterPattern": "TODO|FIXME|HACK",
+      "model": "haiku",
+      "mode": "both",
+      "severity": "minor",
+      "routesTo": "ticket-creator",
+      "detect": "A `TODO`, `FIXME`, or `HACK` comment with no ticket reference (e.g. `CER-123` or a URL). A comment that references a tracking ticket is NOT a finding.",
+      "suggestedFix": "File a ticket for the deferred work and reference its id in the comment, or resolve it and delete the comment."
+    },
+    {
+      "id": "catch-only-console",
+      "title": "Catch that only logs",
+      "glob": "src/**/*.{ts,tsx}",
+      "prefilterPattern": "catch\\s*\\(",
+      "model": "sonnet",
+      "mode": "both",
+      "severity": "major",
+      "routesTo": "ticket-creator",
+      "detect": "A `catch` block whose ONLY effect is a `console.error`/`warn`/`log` — no user-facing feedback (toast, error state, surfaced message), no rethrow, no recovery. The error is silently swallowed from the user's perspective. A catch that sets error state, shows a toast, or rethrows is NOT a finding.",
+      "suggestedFix": "Surface the failure to the user (toast / error state) or rethrow; keep the console log only as a secondary diagnostic."
+    },
+    {
+      "id": "server-data-manual-effect",
+      "title": "Manual effect for server data",
+      "glob": "src/**/*.{ts,tsx}",
+      "prefilterPattern": "useEffect",
+      "model": "sonnet",
+      "mode": "both",
+      "severity": "major",
+      "routesTo": "ticket-creator",
+      "detect": "A `useState` + `useEffect` (often + `useCallback`) pattern that fetches SERVER data (calls a service/api, awaits a fetch) and stores it in local state, instead of using React Query (`useQuery`/`useMutation`). Effects that compute from props, subscribe to non-server events, or sync the DOM are NOT findings.",
+      "suggestedFix": "Replace the manual fetch-into-state with a `useQuery`/`useMutation` hook following the project's data-pipeline convention."
+    },
+    {
+      "id": "naming-convention",
+      "title": "Naming-convention violation",
+      "glob": "src/**/*",
+      "prefilterPattern": ".",
+      "model": "haiku",
+      "mode": "both",
+      "severity": "minor",
+      "routesTo": "ticket-creator",
+      "detect": "A file or folder name that violates `.claude/rules/naming-conventions.md` (read that rule file before flagging). Only flag concrete violations of a stated rule; do not invent conventions.",
+      "suggestedFix": "Rename the file/folder to match the documented convention and update its imports."
+    },
+    {
+      "id": "test-without-assertion",
+      "title": "Test with no assertion",
+      "glob": "src/**/*.{test,spec}.{ts,tsx}",
+      "prefilterPattern": "\\b(it|test)\\s*\\(",
+      "model": "haiku",
+      "mode": "both",
+      "severity": "major",
+      "routesTo": "ticket-creator",
+      "detect": "A test body (`it(...)`/`test(...)`) that contains no assertion — no `expect`, no `assert`, no `toThrow`, no explicit failure. A test that only renders without asserting is a finding. Setup-only helpers invoked by other tests are NOT findings.",
+      "suggestedFix": "Add an assertion that captures the behavior under test, or delete the empty test."
+    },
+    {
+      "id": "skipped-test-without-ticket",
+      "title": "Skipped/focused test",
+      "glob": "src/**/*.{test,spec}.{ts,tsx}",
+      "prefilterPattern": "\\.(skip|only)\\b|\\bx(it|describe)\\b",
+      "model": "haiku",
+      "mode": "both",
+      "severity": "major",
+      "routesTo": "ticket-creator",
+      "detect": "A `.skip`/`xit`/`xdescribe` with no ticket reference explaining why it is skipped, OR any `.only` (focused tests must never land — always a finding regardless of comment).",
+      "suggestedFix": "Remove `.only`; for skips, either re-enable the test or reference the ticket tracking why it is disabled."
+    },
+    {
+      "id": "unused-export",
+      "title": "Unused export",
+      "glob": "src/**/*.{ts,tsx}",
+      "prefilterPattern": "export\\b",
+      "model": "sonnet",
+      "mode": "sweep",
+      "severity": "minor",
+      "routesTo": "dead-code-remover",
+      "detect": "An exported symbol (function/const/type/component) that is never imported anywhere in `src/`. Exclude public entrypoints (index barrels re-exported by package consumers), test utilities, and framework-required exports (e.g. Next.js page default exports, Storybook stories).",
+      "suggestedFix": "Delete the unused export (and the symbol if nothing else uses it), or wire it up if it was meant to be consumed."
+    },
+    {
+      "id": "orphaned-module",
+      "title": "Orphaned module",
+      "glob": "src/**/*.{ts,tsx}",
+      "prefilterPattern": ".",
+      "model": "sonnet",
+      "mode": "sweep",
+      "severity": "minor",
+      "routesTo": "dead-code-remover",
+      "detect": "A component/hook/service module whose exports are imported only from within its own folder, or not at all — an island disconnected from the app. Distinguish from `unused-export`: this is whole-module orphaning. Exclude entrypoints and test files.",
+      "suggestedFix": "Remove the orphaned module, or connect it to the feature that was meant to use it."
+    },
+    {
+      "id": "commented-out-block",
+      "title": "Commented-out code block",
+      "glob": "src/**/*.{ts,tsx,js,jsx}",
+      "prefilterPattern": "//|/\\*",
+      "model": "haiku",
+      "mode": "both",
+      "severity": "minor",
+      "routesTo": "dead-code-remover",
+      "detect": "A contiguous block of commented-out CODE longer than 10 lines (configurable). Prose comments, JSDoc, and short illustrative snippets are NOT findings — only disabled real code.",
+      "suggestedFix": "Delete the commented-out code (git history preserves it)."
+    },
+    {
+      "id": "unreachable-code",
+      "title": "Unreachable code",
+      "glob": "src/**/*.{ts,tsx}",
+      "prefilterPattern": "return|throw|break|continue",
+      "model": "sonnet",
+      "mode": "both",
+      "severity": "major",
+      "routesTo": "dead-code-remover",
+      "detect": "Code after an unconditional `return`/`throw`/`break`/`continue` in the same block, or a branch whose condition is statically always-false/always-true making a branch dead.",
+      "suggestedFix": "Remove the unreachable code or fix the control flow that made it unreachable."
+    },
+    {
+      "id": "terminology-drift",
+      "title": "Terminology drift",
+      "glob": "src/**/*.{ts,tsx}",
+      "prefilterPattern": ".",
+      "model": "sonnet",
+      "mode": "sweep",
+      "severity": "nit",
+      "routesTo": "glossary-maintainer",
+      "detect": "A domain term used in a way that is absent from or conflicts with `docs/glossary.md`. Only fires when a glossary exists. Read the glossary entry before flagging; never paraphrase a definition.",
+      "suggestedFix": "Align the usage with the glossary, or file a glossary update if the term genuinely evolved."
+    }
+  ]
+}
