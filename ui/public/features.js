@@ -37,7 +37,9 @@ function build() {
   return true;
 }
 
-// Render the building epics' child tickets (grouped by epic) as state-colored chips.
+// Render the epics' child tickets (grouped by epic) as chips, each labeled with
+// its current pipeline state. The `kind-${state}` class is a forward-compatible
+// hook for per-state coloring; no per-state palette exists in the app yet.
 function toggleDrill() {
   const drill = document.getElementById('feature-drill');
   if (!drill) return;
