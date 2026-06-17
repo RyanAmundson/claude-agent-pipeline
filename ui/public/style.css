@@ -292,3 +292,20 @@ body:not([data-view="log"]) .log-only { display: none; }
   .pl-node.running .pl-node-box { animation: none; }
   .pl-node.pressure .pl-node-pressure { animation: none; }
 }
+
+/* features tab: hide other panels when active, and hide #features in the other views (mirrors the explicit pipeline/log/agents toggles) */
+body[data-view="features"] #pipeline,
+body[data-view="features"] #log,
+body[data-view="features"] #agents,
+body[data-view="pipeline"] #features,
+body[data-view="log"]      #features,
+body[data-view="agents"]   #features { display: none; }
+
+#feature-epics { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.epic-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.epic-title { color: var(--text); font-weight: 600; }
+.epic-prog { color: var(--ok); }
+.epic-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.child-chip { font-size: 11px; color: var(--dim); border: 1px solid var(--line);
+  border-radius: 10px; padding: 1px 7px; }

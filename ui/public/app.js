@@ -1,4 +1,5 @@
 import { initPipeline } from './pipeline.js';
+import { initFeaturePipeline } from './feature-pipeline.js';
 import { colorForAgent } from './colors.js';
 
 // Live log viewer for agent-pipeline. Subscribes to /api/v1/log (SSE) and
@@ -517,6 +518,7 @@ function selectTab(view) {
   for (const t of tabs) t.setAttribute('aria-selected', String(t.dataset.tab === view));
   if (view === 'agents') renderAgents();
   if (view === 'pipeline') initPipeline();
+  if (view === 'features') initFeaturePipeline();
 }
 for (const t of tabs) {
   t.addEventListener('click', () => selectTab(t.dataset.tab));
