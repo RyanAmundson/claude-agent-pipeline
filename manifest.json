@@ -226,6 +226,27 @@
         "github"
       ]
     },
+    "feature-spec-writer": {
+      "stage": "feature",
+      "requires": []
+    },
+    "feature-architect": {
+      "stage": "feature",
+      "requires": ["github"]
+    },
+    "feature-decomposer": {
+      "stage": "feature",
+      "requires": []
+    },
+    "feature-integrator": {
+      "stage": "feature",
+      "requires": ["github"]
+    },
+    "feature-acceptance-validator": {
+      "stage": "feature",
+      "requires": ["github"],
+      "optional": ["agent-browser", "playwright", "chrome-devtools"]
+    },
     "a11y-detector": {
       "stage": "detector",
       "requires": [],

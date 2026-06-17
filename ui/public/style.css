@@ -305,3 +305,23 @@ body:not([data-view="log"]) .log-only { display: none; }
   .pl-node.running .pl-node-box { animation: none; }
   .pl-node.pressure .pl-node-pressure { animation: none; }
 }
+
+/* feature-pipeline tab (epic view): coexists with the features-as-tickets tab.
+   Hide every other panel when it is active, and hide #feature-pipeline in all other views. */
+body[data-view="feature-pipeline"] #pipeline,
+body[data-view="feature-pipeline"] #log,
+body[data-view="feature-pipeline"] #agents,
+body[data-view="feature-pipeline"] #features,
+body[data-view="pipeline"] #feature-pipeline,
+body[data-view="log"]      #feature-pipeline,
+body[data-view="agents"]   #feature-pipeline,
+body[data-view="features"] #feature-pipeline { display: none; }
+
+#feature-pipeline-epics { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.epic-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.epic-title { color: var(--text); font-weight: 600; }
+.epic-prog { color: var(--ok); }
+.epic-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.child-chip { font-size: 11px; color: var(--dim); border: 1px solid var(--line);
+  border-radius: 10px; padding: 1px 7px; }

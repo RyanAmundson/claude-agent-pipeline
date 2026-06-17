@@ -13,6 +13,7 @@ import { EventEmitter } from 'node:events';
 import { diffRunIndexes, ensureRunsDirs, getRun, getRunEvents, indexRuns, listRuns, reapOrphanedRuns, runsRoot, RUN_STATES } from './runs.js';
 import { readCycleLines, readCycleTail, computeDeltas, cyclesFileSize } from './cycles.js';
 import { readOrchestratorState, orchestratorStatePath } from './orchestrator.js';
+import { readEpics, EPIC_STATES, epicsDir, indexEpics, diffEpicIndexes } from './epics.js';
 
 export { listRuns, getRun, getRunEvents, reapOrphanedRuns, RUN_STATES };
 
@@ -148,11 +149,15 @@ export function readSnapshot(opts) {
     for (const t of list) ticketsById[t.id] = t;
   }
 
+  // Features-as-tickets view: feature:* are ordinary ticket states.
   for (const state of FEATURE_STATES) {
     const list = readTicketsInState(target, state);
     ticketsByState[state] = list.map(({ _state, ...t }) => t);
     for (const t of list) ticketsById[t.id] = t;
   }
+
+  // Epic substrate (feature-pipeline view): epics live in their own store.
+  const epics = readEpics({ target });
 
   const liveRuns = listRuns({ target });
 
@@ -188,8 +193,10 @@ export function readSnapshot(opts) {
     generatedAt: new Date().toISOString(),
     states: STATES,
     featureStates: FEATURE_STATES,
+    epicStates: EPIC_STATES,
     agents,
     tickets: { byState: ticketsByState, count: Object.keys(ticketsById).length },
+    epics,
     runs: {
       active: liveRuns.active,
       completed: liveRuns.completed,
@@ -277,6 +284,7 @@ export function createWatcher(opts) {
   emitter.setMaxListeners(0);
 
   let lastTickets = indexTickets(target);
+  let lastEpics = indexEpics(target);
   let lastRuns = indexRuns(target);
   // Count BEFORE size: an append landing between the two reads then bumps the
   // size check on the next reconcile and gets emitted, instead of being
@@ -308,6 +316,10 @@ export function createWatcher(opts) {
     const nowTickets = indexTickets(target);
     for (const ev of diffIndexes(lastTickets, nowTickets)) emit(ev);
     lastTickets = nowTickets;
+
+    const nowEpics = indexEpics(target);
+    for (const ev of diffEpicIndexes(lastEpics, nowEpics)) emit(ev);
+    lastEpics = nowEpics;
 
     // Reap before re-indexing runs so the diff surfaces orphans as state moves.
     try { reapOrphanedRuns(target); } catch {}
@@ -360,6 +372,17 @@ export function createWatcher(opts) {
       watchers.push(w);
     } catch (err) {
       // Watcher creation failed for this dir; reconciliation will still cover it.
+      emitter.emit('error', err);
+    }
+  }
+  for (const state of EPIC_STATES) {
+    const dir = join(epicsDir(target), state);
+    try {
+      if (!existsSync(dir)) continue;
+      const w = fsWatch(dir, { persistent: true }, onFsChange);
+      w.on('error', err => emitter.emit('error', err));
+      watchers.push(w);
+    } catch (err) {
       emitter.emit('error', err);
     }
   }
