@@ -22,8 +22,12 @@ function el(name, attrs = {}) {
 export function buildStaticGraph(svg, { nodes, edges, counts = {} }) {
   const edgeEls = new Map();
   const nodeEls = new Map();
-  const edgeLayer = el('g', { class: 'pl-edges' });
-  const nodeLayer = el('g', { class: 'pl-nodes' });
+  // Distinct group classes (not the spine's `pl-edges`/`pl-nodes`) so a
+  // `querySelector('.pl-edges')` elsewhere can't ambiguously match this band's
+  // layers. Per-element `.pl-edge`/`.pl-node` classes are unchanged, so styling
+  // still applies.
+  const edgeLayer = el('g', { class: 'pl-static-edges' });
+  const nodeLayer = el('g', { class: 'pl-static-nodes' });
 
   for (const edge of edges) {
     const p = el('path', { class: `pl-edge kind-${edge.kind}`, d: pathFor(edge, nodes), 'data-edge': edge.id });
