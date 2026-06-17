@@ -190,6 +190,34 @@ Filesystem-backend e2e, claude-free (pattern of `12-orchestrator.sh` /
 - `agent-pipeline list-agents` / `agent pipeline agent <name>` parse checks for both new
   defs.
 
+## Integration with the new-feature pipeline (landed on main 2026-06-17)
+
+The new-feature pipeline (epics, fan-out, `feature:*` states) and the `conflict-resolver`
+agent merged to `main` concurrently with this work; this branch was rebased onto them. The
+two efforts are additive (no textual conflicts), but the macro loop is made **aware** of the
+feature pipeline so it evaluates the whole system, not just the bug-fix path:
+
+- **`pipeline-evaluator`** scores feature-pipeline health **when `.pipeline/epics/` exists** —
+  epic state dwell, fan-out yield, epic rework, and conflict-resolution recurrence (a PR
+  re-flagged `pipeline:needs-conflict-resolution` after `conflict-resolver` already fixed it).
+  These appear as an optional `featurePipeline` block in `scorecard.jsonl`. **When the feature
+  pipeline is not in use, the block is omitted entirely** — never synthesized, consistent with
+  the "never invent findings / never lower the bar" discipline.
+- **`agent-architect`** treats feature-pipeline *topology* (epic dispatch, `feature:*`
+  transitions, conflict routing) as **orchestrator-owned and loop-critical** — a capability-gap
+  needing it rerouted goes in the `needs-human-decision` note. It may still author new
+  feature-pipeline agents, which must conform to the contracts in
+  `docs/superpowers/specs/2026-06-17-new-feature-pipeline-design.md`.
+- **Forward-compatible by design.** The feature pipeline is currently **spec-only** (the
+  inferred `feature-*` agents are not implemented on disk; only `conflict-resolver` is). The
+  extension therefore references only artifacts/contracts that exist (`feature:*` states,
+  `.pipeline/epics/`, `conflict-task`, `agent:conflict-resolver`) and guards every read on the
+  epics directory being present — so it activates automatically if/when the pipeline ships,
+  and stays silent until then.
+- **Invariants intact.** No new finding types were added here; `conflict-task`
+  (branch-updater → conflict-resolver) does not collide with the evaluator's three types. The
+  single-producer / single-consumer contract is unchanged.
+
 ## Decisions locked (operator-confirmed)
 
 - Scope = combination: aggregate evaluation **+** effectiveness verification **+** new-agent

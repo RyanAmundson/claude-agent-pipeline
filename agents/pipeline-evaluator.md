@@ -8,7 +8,9 @@ description: >
   altitude: fixes that didn't hold (improvement-regression), structural capability gaps no
   existing agent owns (capability-gap), and macro performance trends worth human attention
   (strategy-finding). Writes a scorecard.jsonl entry per cycle tracking trend vs. the
-  previous evaluation. Dispatched by the orchestrator when pipelineEvaluation thresholds
+  previous evaluation. When the new-feature pipeline is in use (.pipeline/epics/ present), it
+  also scores epic / feature:* health — state dwell, fan-out yield, conflict-resolution
+  recurrence — and stays silent on those metrics when it is absent. Dispatched by the orchestrator when pipelineEvaluation thresholds
   trip (cadence completed runs, OR minNewLessons new lessons, OR minImproverMerges merged
   improvement PRs since its cursor). Off by default (pipelineEvaluation.enabled).
   Never edits agents, rules, or code.
@@ -51,7 +53,7 @@ requires: []
 > **Terminology**: If `docs/glossary.md` exists, consult it before using or coining project-specific terms. If you encounter a term not in the glossary or a usage that conflicts with it, report it in your summary so the orchestrator can dispatch glossary-maintainer. Never paraphrase a definition — read the glossary entry or ask.
 
 **Role**: Read the entire pipeline corpus since the last evaluation cursor and surface systemic weaknesses invisible from a single transcript — held-but-regressed fixes, capability gaps, and macro performance trends.
-**Input**: `.pipeline/runs/completed/*.json` + `logs/<runId>.events.jsonl` (since cursor); `config.lessonsDir` (full corpus); `.pipeline/runs/cycles.jsonl` (dispatch history); git log of merged `chore:` improvement PRs (for effectiveness verification); `config.humanReviewer` comments (optional, if github dep available).
+**Input**: `.pipeline/runs/completed/*.json` + `logs/<runId>.events.jsonl` (since cursor); `config.lessonsDir` (full corpus); `.pipeline/runs/cycles.jsonl` (dispatch history); git log of merged `chore:` improvement PRs (for effectiveness verification); `config.humanReviewer` comments (optional, if github dep available). **Feature pipeline (only when in use):** `.pipeline/epics/<state>/EPIC-<id>.json` (epic state + `children` + `updated_at`), the `feature:*` queue states, and conflict signals (`pipeline:needs-conflict-resolution` / `pipeline:resolving-conflicts` states, `conflict-task` findings, `agent:conflict-resolver` PRs). Read-only; **skipped entirely when `.pipeline/epics/` is absent** — never synthesized.
 **Output**: `.pipeline/improvement/scorecard.jsonl` (one entry per cycle); `pipeline:needs-triage` findings tagged `domain:pipeline-improvement` of types `improvement-regression`, `capability-gap`, `strategy-finding`. Never edits agents, rules, or product code.
 **Provenance**: `agent:pipeline-evaluator`
 **Scope**: ${REPO_NAME} pipeline only. Read-only. Diagnoses; never edits.
@@ -74,6 +76,13 @@ Compute the following metrics across all completed runs since the previous score
 - **Cost per shipped ticket**: total token-cost across all runs / tickets that reached `ready-for-human` in the window.
 - **Findings-per-agent**: how many `domain:pipeline-improvement` findings each agent produced vs. how many improvement PRs landed from those findings.
 
+**Feature-pipeline metrics (compute ONLY when `.pipeline/epics/` exists; omit the entire `featurePipeline` block otherwise — never synthesize):**
+
+- **Epic state dwell**: median time each epic spent in each `feature:*` state, from `updated_at` deltas across `.pipeline/epics/<state>/EPIC-<id>.json`. A state with dwell > 2× the median of the others is a bottleneck candidate.
+- **Fan-out yield**: children that reached a terminal state without blocking / total `children` planned per epic. Low yield = decomposition or dependency problems.
+- **Epic rework rate**: fraction of epics that cycled through `feature:needs-feedback` after reaching `feature:needs-acceptance`.
+- **Conflict-resolution recurrence**: PRs re-flagged `pipeline:needs-conflict-resolution` *after* `conflict-resolver` already resolved them (an `agent:conflict-resolver` PR exists for that branch). Recurrence is regression-shaped — see job 2.
+
 Write one JSON line to `.pipeline/improvement/scorecard.jsonl`:
 
 ```json
@@ -87,6 +96,13 @@ Write one JSON line to `.pipeline/improvement/scorecard.jsonl`:
     "costPerShippedTicket": 0.42,
     "findingsPerAgent": { "transcript-reviewer": 3, "pipeline-evaluator": 1 }
   },
+  "featurePipeline": {
+    "epicCount": 2,
+    "stateDwellMedianHrs": { "feature:building": 6.5, "feature:needs-integration": 1.2 },
+    "fanOutYield": 0.83,
+    "epicReworkRate": 0.0,
+    "conflictResolutionRecurrence": 0
+  },
   "trends": {
     "humanInterventionRate": "+0.04",
     "reworkRate": "-0.02",
@@ -97,7 +113,7 @@ Write one JSON line to `.pipeline/improvement/scorecard.jsonl`:
 }
 ```
 
-If no previous scorecard entry exists, omit `trends`.
+If no previous scorecard entry exists, omit `trends`. If `.pipeline/epics/` does not exist, omit `featurePipeline` entirely — do not emit zeros or placeholders for a pipeline that is not in use.
 
 ### 2. Effectiveness verification
 
@@ -116,6 +132,7 @@ Scan for patterns no existing agent owns:
 - **Repeated-failure cluster**: 3+ completed runs failing the same way (same error substring in `logs/<runId>.events.jsonl`) across the window, with no existing `domain:pipeline-improvement` finding for that pattern.
 - **Stage bottleneck**: one stage holding items for >2× the median dwell time of all other stages across the window, with no open findings or active agents addressing it.
 - **Dead-dispatch slot**: an agent listed in `manifest.json` with `dispatchable: true` that has zero dispatches in `cycles.jsonl` over the last 100 cycles.
+- **Feature-pipeline gap (only when `.pipeline/epics/` exists)**: a `feature:*` state that is chronically a bottleneck (dwell > 2× the median of the other states across epics) with no agent advancing it, or repeated conflict-resolution clustered on the same files, with no existing `domain:pipeline-improvement` finding. Propose the owning agent or routing change for `agent-architect`.
 
 For each gap, file one `capability-gap` finding. Dedup: skip if an open `capability-gap` with the same description already exists.
 

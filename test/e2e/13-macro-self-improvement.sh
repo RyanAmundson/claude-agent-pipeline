@@ -83,5 +83,27 @@ assert_eq "$LEDGER_PROV" "agent:agent-architect" "ledger.jsonl provenance field 
 CONSUMES=$(grep "consumes:" "$REPO_ROOT/agents/agent-improver.md")
 assert_contains "$CONSUMES" "improvement-regression" "agent-improver consumes improvement-regression"
 
+# ── 7. Feature-pipeline awareness (forward-compatible, post-rebase onto main) ──
+# pipeline-evaluator scores feature:* / epic health and guards on .pipeline/epics/ presence.
+PE_DEF="$REPO_ROOT/agents/pipeline-evaluator.md"
+assert_contains "$(cat "$PE_DEF")" ".pipeline/epics/" "pipeline-evaluator references the epics dir"
+assert_contains "$(cat "$PE_DEF")" "featurePipeline"  "pipeline-evaluator emits a featurePipeline scorecard block"
+# The scoring must be guarded so it stays silent when the feature pipeline is absent.
+assert_contains "$(cat "$PE_DEF")" "omit" "pipeline-evaluator guards feature metrics (omit when epics absent)"
+
+# agent-architect treats feature-pipeline topology as orchestrator-owned / loop-critical.
+AA_DEF="$REPO_ROOT/agents/agent-architect.md"
+assert_contains "$(cat "$AA_DEF")" "Feature-pipeline topology is orchestrator-owned" "agent-architect guards feature-pipeline topology"
+
+# Rebase integration sanity: the conflict-resolver agent that landed on main is still present.
+assert_contains "$LIST" "conflict-resolver" "conflict-resolver agent survived the rebase (list-agents)"
+
+# A scorecard entry carrying the optional featurePipeline block round-trips.
+cat > "$WORK/.pipeline/improvement/scorecard-fp.jsonl" <<'JSON'
+{ "evaluatedAt": "2026-06-17T00:00:00Z", "window": { "fromRunId": null, "toRunId": "run-xyz", "runCount": 3 }, "metrics": { "humanInterventionRate": 0.1, "reworkRate": 0.0, "cycleYield": 0.9, "costPerShippedTicket": 0.2, "findingsPerAgent": {} }, "featurePipeline": { "epicCount": 2, "fanOutYield": 0.83, "epicReworkRate": 0.0, "conflictResolutionRecurrence": 0 }, "provenance": "agent:pipeline-evaluator" }
+JSON
+FP_YIELD=$(node -e "const l=require('fs').readFileSync('$WORK/.pipeline/improvement/scorecard-fp.jsonl','utf8').trim().split('\n'); console.log(JSON.parse(l[0]).featurePipeline.fanOutYield)" | sed 's/\x1b\[[0-9;]*m//g')
+assert_eq "$FP_YIELD" "0.83" "scorecard featurePipeline.fanOutYield round-trips"
+
 echo
 echo "13-macro-self-improvement: all assertions passed"

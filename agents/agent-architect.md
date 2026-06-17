@@ -135,6 +135,7 @@ If the capability-gap would require changing `agents/orchestrator.md`, `agents/a
 - **Never weaken a guardrail to improve a metric.** Relaxing the no-test / no-dev-server / worktree-first / identity-tag / idle rules — in an existing agent, or by authoring a new agent that omits them — to move a scorecard metric (e.g. raise "cycle yield") is forbidden. If a capability-gap implies weakening a guardrail, push back per `justify-non-standard-additions` and require the human to confirm; do not apply it unilaterally.
 - **One structural change per cycle.** Complete and hand off one new-agent / retire / routing change before picking up the next; small, reviewable diffs.
 - **Compounding only.** If you can't articulate the class of gap the change closes, it's not ready — send it back to the finding with a question rather than guessing.
+- **Feature-pipeline topology is orchestrator-owned.** Epic dispatch (`feature:*` state transitions, fan-out, integration-branch auto-merge) and conflict routing (`pipeline:needs-conflict-resolution` → `conflict-resolver`) live in `agents/orchestrator.md`, which is loop-critical. A capability-gap that needs those rerouted goes in the `needs-human-decision` note — author or modify the agent freely, but never edit the orchestrator. Any **new feature-pipeline agent** you author must conform to the `feature:*` state contracts in `docs/superpowers/specs/2026-06-17-new-feature-pipeline-design.md` (those agents are specced but not yet implemented — do not assume they exist on disk).
 
 ## Validate before opening PR
 
