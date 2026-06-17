@@ -13,6 +13,7 @@ import { EventEmitter } from 'node:events';
 import { diffRunIndexes, ensureRunsDirs, getRun, getRunEvents, indexRuns, listRuns, reapOrphanedRuns, runsRoot, RUN_STATES } from './runs.js';
 import { readCycleLines, readCycleTail, computeDeltas, cyclesFileSize } from './cycles.js';
 import { readOrchestratorState, orchestratorStatePath } from './orchestrator.js';
+import { readEpics, EPIC_STATES } from './epics.js';
 
 export { listRuns, getRun, getRunEvents, reapOrphanedRuns, RUN_STATES };
 
@@ -132,6 +133,8 @@ export function readSnapshot(opts) {
     for (const t of list) ticketsById[t.id] = t;
   }
 
+  const epics = readEpics({ target });
+
   const liveRuns = listRuns({ target });
 
   // Latest orchestrator cycle (backend-neutral telemetry). On non-filesystem
@@ -165,8 +168,10 @@ export function readSnapshot(opts) {
     target,
     generatedAt: new Date().toISOString(),
     states: STATES,
+    epicStates: EPIC_STATES,
     agents,
     tickets: { byState: ticketsByState, count: Object.keys(ticketsById).length },
+    epics,
     runs: {
       active: liveRuns.active,
       completed: liveRuns.completed,

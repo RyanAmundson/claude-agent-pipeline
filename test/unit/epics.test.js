@@ -99,3 +99,16 @@ test('diffEpicIndexes detects epic.remove with correct id and state', () => {
   assert.equal(evs[0].state, 'building');
   rmSync(target, { recursive: true, force: true });
 });
+
+import { readSnapshot } from '../../api/index.js';
+
+test('readSnapshot includes an epics block', () => {
+  const target = tmpTarget();
+  writeEpic(target, 'building', { id: 'EPIC-001', title: 'darkmode' });
+  const snap = readSnapshot({ target });
+  assert.equal(snap.epics.count, 1);
+  assert.equal(snap.epics.byState['building'][0].id, 'EPIC-001');
+  assert.ok(Array.isArray(snap.epicStates));
+  assert.equal(snap.epicStates[0], 'needs-spec');
+  rmSync(target, { recursive: true, force: true });
+});
