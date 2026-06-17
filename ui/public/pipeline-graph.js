@@ -2,7 +2,7 @@
 // No DOM — importable in Node (unit tests) and the browser (pipeline.js).
 
 // SVG canvas; used as the <svg> viewBox. Coordinates below are tunable.
-export const VIEW = { w: 1260, h: 560 };
+export const VIEW = { w: 1260, h: 720 };
 
 // Each node has a center (x, y). `kind` drives styling. `agent` is the owning
 // agent shown beneath the node. `state` (when present) is the queue state whose
@@ -26,6 +26,7 @@ export const NODES = {
   'needs-feedback':         { label: 'feedback',    agent: 'feedback-responder', x: 850,  y: 410, kind: 'state', state: 'needs-feedback' },
   'needs-info':             { label: 'needs-info',  agent: 'ticket-reviewer',    x: 310,  y: 410, kind: 'park',  state: 'needs-info', agentHome: false },
   obsolete:                 { label: 'obsolete',    agent: 'relevance-checker',  x: 430,  y: 410, kind: 'exit',  state: 'obsolete' },
+  'needs-conflict-resolution': { label: 'conflict', agent: 'conflict-resolver', x: 1010, y: 410, kind: 'state', state: 'needs-conflict-resolution' },
   orchestrator:             { label: 'orchestrator', agent: 'orchestrator',      x: 600,  y: 40,  kind: 'meta' },
   detectors:                { label: 'detectors ⟳', agent: null,            x: 70,   y: 120, kind: 'feeder' },
   utility:                  { label: 'utility ⛭',   agent: null,            x: 190,  y: 120, kind: 'feeder' },
@@ -63,6 +64,9 @@ export const EDGES = [
   // reserved: relevance-checker
   { id: 'obsolete:work',     from: 'needs-work',        to: 'obsolete',          kind: 'exit',    bend: 0 },
   { id: 'obsolete:ready',    from: 'ready-for-human',   to: 'obsolete',          kind: 'exit',    bend: 80 },
+  // conflict-resolution detour: a conflicted PR leaves ready-for-human until clean
+  { id: 'conflict:detour',   from: 'ready-for-human',           to: 'needs-conflict-resolution', kind: 'loop',     bend: 30 },
+  { id: 'conflict:resolved', from: 'needs-conflict-resolution', to: 'ready-for-human',           kind: 'reentry',  bend: -30 },
   // feeders (detectors + utility flow findings into triage)
   { id: 'feed:detectors',    from: 'detectors',         to: 'needs-triage',      kind: 'feed',    bend: 0 },
   { id: 'feed:utility',      from: 'utility',           to: 'needs-triage',      kind: 'feed',    bend: 0 },
@@ -78,6 +82,7 @@ export const EDGES = [
   { id: 'dispatch:needs-feature-validation', from: 'orchestrator', to: 'needs-feature-validation', kind: 'dispatch', bend: 45 },
   { id: 'dispatch:needs-feedback',    from: 'orchestrator', to: 'needs-feedback',    kind: 'dispatch', bend: 40 },
   { id: 'dispatch:done',              from: 'orchestrator', to: 'done',              kind: 'dispatch', bend: 60 },
+  { id: 'dispatch:needs-conflict-resolution', from: 'orchestrator', to: 'needs-conflict-resolution', kind: 'dispatch', bend: 55 },
 ];
 
 // Direct from→to → edge id (built from EDGES).
@@ -272,6 +277,7 @@ export const STAGES = [
   { node: 'needs-regression-check',   queue: 'needs-regression-check' },
   { node: 'needs-feature-validation', queue: 'needs-feature-validation' },
   { node: 'needs-feedback',    queue: 'needs-feedback' },
+  { node: 'needs-conflict-resolution', queue: 'needs-conflict-resolution' },
   { node: 'done',              queue: 'done' },
 ];
 
