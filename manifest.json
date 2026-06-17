@@ -216,6 +216,10 @@
         "github"
       ]
     },
+    "feature-spec-writer": {
+      "stage": "feature",
+      "requires": []
+    },
     "a11y-detector": {
       "stage": "detector",
       "requires": [],
