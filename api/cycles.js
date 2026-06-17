@@ -41,6 +41,7 @@ export const DISPATCH_STATE = Object.freeze({
   'regression-tester': 'needs-regression-check',
   'feature-validator': 'needs-feature-validation',
   'feedback-responder': 'needs-feedback',
+  'conflict-resolver': 'needs-conflict-resolution',
   'branch-updater': 'ready-for-human',
 });
 

@@ -22,8 +22,12 @@ const PLUGIN_ROOT = resolve(__dirname, '..');
 
 export const API_VERSION = 1;
 
-// The 13 queue states, in pipeline order. Anything in `in-progress` is "active".
+// The 14 queue states, in pipeline order. Anything in `in-progress` is "active".
 // `obsolete` is terminal (retired as no-longer-relevant) — distinct from `done`.
+// `needs-conflict-resolution` is a detour that displaces `ready-for-human` while a PR
+// conflicts with main (conflict-resolver returns it to `ready-for-human` once clean).
+// `resolving-conflicts` is intentionally omitted — it's a transient claim/lock label the
+// conflict-resolver adds on top while actively merging, not a resting queue state.
 export const STATES = Object.freeze([
   'needs-triage',
   'needs-review',
@@ -34,6 +38,7 @@ export const STATES = Object.freeze([
   'needs-regression-check',
   'needs-feature-validation',
   'needs-feedback',
+  'needs-conflict-resolution',
   'ready-for-human',
   'done',
   'needs-info',

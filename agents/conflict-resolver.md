@@ -85,11 +85,19 @@ carrying `pipeline:resolving-conflicts` (another resolver owns it).
 Git checkouts/merges are stateful, so two resolvers must never touch the same branch:
 
 ```bash
-gh pr edit <number> --add-label "pipeline:resolving-conflicts"
+gh pr edit <number> --add-label "pipeline:resolving-conflicts" \
+  --remove-label "pipeline:ready-for-human"
 ```
 
-If a PR already has that label, skip it — someone else is on it. Always remove the label in
-step 6, on success **or** abort.
+Claiming also drops `pipeline:ready-for-human` if the PR carried it. A conflicted PR is not
+mergeable, so it must not sit in the human-review queue while you resolve — this matters when
+you rediscover a conflicting PR via `git merge-tree` before branch-updater/orchestrator has
+flagged it (removing a label the PR doesn't have is a safe no-op). The pre-conflict-state
+check in §6 reads `PRIOR_STATE` empty here and restores `ready-for-human` on a clean tier-A/B
+resolution; an early-stage PR keeps its stage label untouched.
+
+If a PR already has the `pipeline:resolving-conflicts` label, skip it — someone else is on
+it. Always remove that label in step 6, on success **or** abort.
 
 ---
 
@@ -144,8 +152,11 @@ When intents are genuinely contradictory — both sides rewrote the same functio
 ```bash
 git merge --abort
 gh pr edit <number> --add-label "pipeline:needs-feedback" \
-  --remove-label "pipeline:resolving-conflicts"
+  --remove-label "pipeline:resolving-conflicts" \
+  --remove-label "pipeline:needs-conflict-resolution"
 ```
+
+(Drop `pipeline:needs-conflict-resolution` too — otherwise the IDENTIFY query re-selects this PR next cycle and re-escalates in a loop. It's now the human's call under `pipeline:needs-feedback`. `pipeline:ready-for-human` was already removed when the PR was flagged.)
 
 Post a comment with the hunks, your analysis, and a recommended resolution:
 
@@ -226,11 +237,23 @@ PR_FILES=$(git diff --name-only "$MERGE_BASE" HEAD~1 | sort -u)
 OVERLAP=$(comm -12 <(echo "$MAIN_FILES") <(echo "$PR_FILES"))
 ```
 
+**Determine the pre-conflict state first.** When the PR was flagged, the agent that flagged it removed `pipeline:ready-for-human` if it had been ready (a conflicted PR can't sit in the human-review queue), but left an *earlier* stage label in place if it was still mid-pipeline. Recover where to send the PR back to:
+
+```bash
+# Any pipeline:* state label still on the PR, excluding the two conflict labels:
+PRIOR_STATE=$(gh pr view <number> --json labels \
+  -q '[.labels[].name | select(startswith("pipeline:")
+       and . != "pipeline:needs-conflict-resolution"
+       and . != "pipeline:resolving-conflicts")] | first // ""')
+# PRIOR_STATE empty  → PR was at pipeline:ready-for-human → restore it on a clean resolution.
+# PRIOR_STATE set    → PR was mid-pipeline (e.g. pipeline:needs-test-review) → resume that state.
+```
+
 | Tier | Condition | Routing |
 |------|-----------|---------|
-| **A. No overlap** | `OVERLAP` empty | Keep `pipeline:ready-for-human`. CI confirms green. |
-| **B. Config/infra overlap only** | overlap is only `package.json`, lockfiles, `*.config.*`, `.github/**`, root configs — not imported by the PR's source | Keep `pipeline:ready-for-human`. Downgrade only if CI goes red. |
-| **C. Same `src/**` file, or any forbidden file** | overlap includes a `src/**` file the PR also touched | Downgrade to `pipeline:needs-test-review` → tester → code-reviewer. |
+| **A. No overlap** | `OVERLAP` empty | Restore the pre-conflict state: re-add `pipeline:ready-for-human` if `PRIOR_STATE` was empty, otherwise leave `PRIOR_STATE` in place. CI confirms green. |
+| **B. Config/infra overlap only** | overlap is only `package.json`, lockfiles, `*.config.*`, `.github/**`, root configs — not imported by the PR's source | Same as A: restore the pre-conflict state. Downgrade only if CI goes red. |
+| **C. Same `src/**` file, or any forbidden file** | overlap includes a `src/**` file the PR also touched | Route to `pipeline:needs-test-review` → tester → code-reviewer, regardless of prior state — a real semantic merge needs re-verification. |
 
 **Forbidden files that always force Tier C** (a main merge can regress these subtly):
 - `src/[apis]/core-api/api.ts` — global API client config
@@ -242,7 +265,7 @@ Post the tier comment:
 
 ```
 [agent:conflict-resolver] Resolved conflicts with main (N commits). Overlap tier: A.
-Resolved files: <list>. Staying at pipeline:ready-for-human — CI will confirm green.
+Resolved files: <list>. Restoring pipeline:ready-for-human — CI will confirm green.
 ```
 
 or for Tier C:
@@ -254,10 +277,22 @@ Overlapping files:
 Downgrading to pipeline:needs-test-review.
 ```
 
-Finally, remove the conflict labels:
+Finally, set the destination state and drop the conflict labels in one edit:
 
 ```bash
-gh pr edit <number> --remove-label "pipeline:needs-conflict-resolution" \
+# Tier A/B, PR was ready before the conflict (PRIOR_STATE empty) — restore ready-for-human:
+gh pr edit <number> --add-label "pipeline:ready-for-human,agent:conflict-resolver" \
+  --remove-label "pipeline:needs-conflict-resolution" \
+  --remove-label "pipeline:resolving-conflicts"
+
+# Tier A/B, PR was mid-pipeline (PRIOR_STATE set) — its state label is still on the PR, just clear the conflict labels:
+gh pr edit <number> --add-label "agent:conflict-resolver" \
+  --remove-label "pipeline:needs-conflict-resolution" \
+  --remove-label "pipeline:resolving-conflicts"
+
+# Tier C — route to test review (ready-for-human was already removed upstream):
+gh pr edit <number> --add-label "pipeline:needs-test-review,agent:conflict-resolver" \
+  --remove-label "pipeline:needs-conflict-resolution" \
   --remove-label "pipeline:resolving-conflicts"
 ```
 
@@ -279,7 +314,10 @@ already pushed this cycle.
 ## 8. EDGE CASES
 
 - **Branch is conflict-free on checkout** — the flag was stale; remove
-  `pipeline:needs-conflict-resolution`, route by tier if it was merely behind, done.
+  `pipeline:needs-conflict-resolution` and restore the pre-conflict state (re-add
+  `pipeline:ready-for-human` if `PRIOR_STATE` is empty, otherwise leave the earlier stage
+  label in place — see §6). Route by tier if it was merely behind, done. Don't leave a
+  stale-flagged PR stranded with no state label.
 - **Merge succeeds but `verify` fails for a pre-existing reason** (broken on the branch
   before the merge) — don't mask it; escalate noting the branch was already failing verify.
 - **Conflict only in lockfile but `package.json` is clean** — just regenerate the lockfile;

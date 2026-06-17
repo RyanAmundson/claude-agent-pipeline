@@ -35,7 +35,7 @@ The label namespace is configurable — defaults below assume `labelNamespace = 
 | `pipeline:needs-regression-check` | Code review passed; needs regression validation | regression-tester |
 | `pipeline:needs-feature-validation` | Regression passed; needs feature/acceptance validation | feature-validator |
 | `pipeline:needs-feedback` | Review feedback needs addressing | feedback-responder |
-| `pipeline:needs-conflict-resolution` | PR branch conflicts with main, needs a merge resolution | conflict-resolver |
+| `pipeline:needs-conflict-resolution` | PR branch conflicts with main, needs a merge resolution. Replaces `pipeline:ready-for-human` while outstanding — a conflicted PR is not mergeable, so it leaves the human-review queue until the conflict-resolver clears it | conflict-resolver |
 | `pipeline:resolving-conflicts` | conflict-resolver has claimed the PR and is resolving (lock) | conflict-resolver |
 | `pipeline:ready-for-human` | All automated checks pass, ready for human review | (terminal) |
 | `needs-info` | Ticket lacks detail, parked until creator updates | ticket-reviewer |
