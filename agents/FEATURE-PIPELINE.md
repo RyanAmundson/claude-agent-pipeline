@@ -71,6 +71,17 @@ Feature agents are dispatched by the orchestrator on the same cycle as ticket-pi
 | feature-integrator | `feature:needs-integration` epics exist |
 | feature-acceptance-validator | `feature:needs-acceptance` epics exist |
 | (orchestrator rules) | `feature:building` epics exist → gate deps, auto-merge passing children, advance when all `done` |
+| feedback-responder | `feature:needs-feedback` epics exist → address comments and push |
+
+## Feedback Loop
+
+When an epic is in `feature:needs-feedback` (from a failed acceptance check or human comments on the epic PR), the orchestrator dispatches `feedback-responder` against the epic PR to address the feedback. After the responder pushes its changes, the orchestrator returns the epic to `feature:needs-acceptance` for re-validation:
+
+```bash
+queue/queue-claim.sh <EPIC-id> needs-feedback needs-acceptance --queue-dir .pipeline/epics
+```
+
+A human merging the epic PR moves it to `feature:done`. Post-merge cleanup (e.g., deleting the integration branch) is handled the same way as in the ticket pipeline.
 
 ## Backends
 
