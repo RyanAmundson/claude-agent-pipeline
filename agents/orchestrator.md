@@ -35,6 +35,7 @@ Sources:
 - Linear: query for issues with `pipeline:*` labels for ticket pipeline states
 - Linear backlog: query for Backlog/Todo issues assigned to the owner — these are ready for workers even without `pipeline:needs-work` labels
 - Linear unassigned: query for Backlog/Todo issues with NO assignee on the configured team — many UI tickets land unassigned and are invisible to the pipeline. Workers should self-assign before starting. Filter via `excludeProjects` and `excludeLabels` in `.pipeline/config.json`
+- Feature epics: scan `.pipeline/epics/<state>/` (filesystem) or `feature:*` labels (GitHub/Linear) — every cycle, alongside tickets
 
 **The pipeline is NOT idle if there are backlog tickets.** Always dispatch at least one worker when there are actionable backlog tickets (assigned to the owner OR unassigned UI tickets), regardless of how many PRs are in the review queue. New work and review work are independent streams — don't gate one on the other. Workers self-assign unassigned tickets via Linear before starting work.
 
@@ -181,6 +182,38 @@ The feedback-responder is on-demand like other agents, but has an additional tri
 - A comment is "unresolved" if there is no `[agent:feedback-responder] Addressed` reply after it
 - If ANY unresolved the owner comment exists → dispatch feedback-responder immediately, even if the PR has no `pipeline:needs-feedback` label
 - the owner's comments are the highest priority dispatch — always dispatch feedback-responder before other roles
+
+## Feature pipeline (epics)
+
+Each cycle, after the ticket pipeline snapshot, also scan feature epics and run the building monitor. Feature epics are read from `.pipeline/epics/<state>/` (filesystem backend) or from `feature:*` labels on tracking issues (GitHub/Linear backend).
+
+### Dispatch feature agents
+
+When the corresponding epic queue is non-empty, dispatch the feature agent for that state (subject to the global 5-agent-per-cycle cap shared with ticket-pipeline agents):
+
+| State | Agent | Prompt source |
+|---|---|---|
+| `feature:needs-spec` | feature-spec-writer | `.agents/feature-spec-writer.md` |
+| `feature:needs-design` | feature-architect | `.agents/feature-architect.md` |
+| `feature:needs-decomposition` | feature-decomposer | `.agents/feature-decomposer.md` |
+| `feature:needs-integration` | feature-integrator | `.agents/feature-integrator.md` |
+| `feature:needs-acceptance` | feature-acceptance-validator | `.agents/feature-acceptance-validator.md` |
+
+### Building monitor (for `feature:building` epics)
+
+For each epic currently in the `building` state, run three monitoring duties each cycle (exact commands are in `agents/FEATURE-PIPELINE.md` §Dependency gating and §Child auto-merge):
+
+1. **Dependency gating** — for every child in `needs-info/`, check if all ids in its `depends_on` list are in `done`. If so, promote the child to `needs-work` so it starts flowing through the ticket pipeline.
+
+2. **Child auto-merge** — when a child ticket whose JSON carries an `epic` field reaches `ready-for-human`, merge it into the epic's `integration_branch` (no per-child human gate) and move the child to `done`. On a merge conflict, route the child to `needs-conflict-resolution` instead.
+
+3. **Advance when all children done** — when every id in the epic's `children` list is in `done`, advance the epic from `building` → `needs-integration`.
+
+### Feedback routing for `feature:needs-feedback`
+
+When a `feature:needs-feedback` epic exists (human left comments on the epic PR), dispatch `feedback-responder` to address the comments and route the epic back to the relevant stage per `agents/FEATURE-PIPELINE.md`. This follows the same "highest priority" rule as the ticket-pipeline feedback-responder — dispatch it before other feature agents in that cycle.
+
+See `agents/FEATURE-PIPELINE.md` for the full state machine and the exact merge/transition commands.
 
 ## Periodic Agents
 
