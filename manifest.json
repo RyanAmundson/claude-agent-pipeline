@@ -220,6 +220,10 @@
       "stage": "feature",
       "requires": []
     },
+    "feature-architect": {
+      "stage": "feature",
+      "requires": ["github"]
+    },
     "a11y-detector": {
       "stage": "detector",
       "requires": [],
