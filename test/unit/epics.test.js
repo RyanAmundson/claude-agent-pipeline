@@ -101,6 +101,7 @@ test('diffEpicIndexes detects epic.remove with correct id and state', () => {
 });
 
 import { readSnapshot } from '../../api/index.js';
+import { createWatcher } from '../../api/index.js';
 
 test('readSnapshot includes an epics block', () => {
   const target = tmpTarget();
@@ -110,5 +111,25 @@ test('readSnapshot includes an epics block', () => {
   assert.equal(snap.epics.byState['building'][0].id, 'EPIC-001');
   assert.ok(Array.isArray(snap.epicStates));
   assert.equal(snap.epicStates[0], 'needs-spec');
+  rmSync(target, { recursive: true, force: true });
+});
+
+test('createWatcher emits epic.move when an epic changes state', async () => {
+  const target = tmpTarget();
+  writeEpic(target, 'needs-spec', { id: 'EPIC-001', title: 'a' });
+  const w = createWatcher({ target, reconcileMs: 50, debounceMs: 10 });
+  const seen = [];
+  w.on('event', ev => { if (ev.type?.startsWith('epic.')) seen.push(ev); });
+  await new Promise(r => setTimeout(r, 30));
+  // move the epic
+  const { renameSync, mkdirSync } = await import('node:fs');
+  mkdirSync(join(epicsDir(target), 'needs-design'), { recursive: true });
+  renameSync(join(epicsDir(target), 'needs-spec', 'EPIC-001.json'),
+             join(epicsDir(target), 'needs-design', 'EPIC-001.json'));
+  await new Promise(r => setTimeout(r, 150));
+  w.close();
+  const move = seen.find(e => e.type === 'epic.move');
+  assert.ok(move, 'epic.move emitted');
+  assert.equal(move.to, 'needs-design');
   rmSync(target, { recursive: true, force: true });
 });
