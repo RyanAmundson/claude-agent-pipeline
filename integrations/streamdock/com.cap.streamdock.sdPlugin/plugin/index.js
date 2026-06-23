@@ -1,9 +1,7 @@
-import { appendFileSync, mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, dirname } from 'node:path';
-import { connect } from './ws-client.js';
+import { StreamDock } from './sd.js';
+import { registerDispatchAction } from './actions/dispatch.js';
+import { registerPickerAction } from './actions/picker.js';
 
-// Stream Dock launches us with: -port N -pluginUUID U -registerEvent E -info JSON
 function parseArgs(argv) {
   const a = {};
   for (let i = 0; i < argv.length; i += 2) a[argv[i].replace(/^-+/, '')] = argv[i + 1];
@@ -11,16 +9,9 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const logPath = join(homedir(), '.cap', 'streamdock-events.log');
-mkdirSync(dirname(logPath), { recursive: true });
-
-const ws = connect({
-  port: Number(args.port),
-  onOpen() {
-    ws.send(JSON.stringify({ event: args.registerEvent, uuid: args.pluginUUID }));
-    appendFileSync(logPath, `[open] registered ${args.pluginUUID}\n`);
-  },
-  onMessage(text) {
-    appendFileSync(logPath, text + '\n');   // capture every event verbatim
-  },
+const sd = new StreamDock({
+  port: Number(args.port), uuid: args.pluginUUID, registerEvent: args.registerEvent,
 });
+registerDispatchAction(sd);
+registerPickerAction(sd);
+sd.connect();
