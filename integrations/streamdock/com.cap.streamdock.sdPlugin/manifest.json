@@ -32,6 +32,8 @@
       "Tooltip": "Select the active CAP project.",
       "PropertyInspectorPath": "property-inspector/picker.html",
       "SupportedInMultiActions": false,
+      "Controllers": ["Encoder"],
+      "Encoder": { "TriggerDescription": { "Rotate": "Switch project", "Push": "Select project" } },
       "States": [{ "Image": "icons/category" }]
     }
   ]
