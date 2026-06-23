@@ -90,7 +90,7 @@ The default profile is exported from the physical device during on-device setup 
 
 ## On-device verification checklist
 
-1. Assign the six Dispatch Agent actions to keys (0,0)–(2,1) (or import the default profile once available).
+1. Assign the six Dispatch Agent actions from the Default key map table to their keys (or import the default profile once available).
 2. Assign the Project Picker action to the touch strip.
 3. Rotate the dial to highlight a pipeline repo, then press or tap to select it.
 4. Press each agent key and confirm the LCD cycles through the running → done/failed states.
