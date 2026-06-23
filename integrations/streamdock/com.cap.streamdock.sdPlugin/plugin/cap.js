@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { readdirSync, existsSync } from 'node:fs';
+import { join, basename } from 'node:path';
 import { createInterface } from 'node:readline';
 
 const CLI = 'claude-agent-pipeline';
@@ -46,4 +48,19 @@ export function dispatch({ agent, prompt, target, mode = 'stream' }) {
     child.on('close', (code) => res(resolveDone(sawTerminal, ok, code)));
   });
   return { events, kill: () => child.kill('SIGTERM'), done };
+}
+
+// Directories directly under each root that contain .pipeline/config.json.
+export function discoverProjects(roots) {
+  const out = [];
+  for (const root of roots) {
+    let entries;
+    try { entries = readdirSync(root, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const p = join(root, e.name);
+      if (existsSync(join(p, '.pipeline', 'config.json'))) out.push({ path: p, name: basename(p) });
+    }
+  }
+  return out;
 }
