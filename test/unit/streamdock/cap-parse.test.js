@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRunLine } from '../../../integrations/streamdock/com.cap.streamdock.sdPlugin/plugin/cap.js';
+import { parseRunLine, resolveDone } from '../../../integrations/streamdock/com.cap.streamdock.sdPlugin/plugin/cap.js';
 
 test('run.start → running', () => {
   assert.deepEqual(parseRunLine(JSON.stringify({ type: 'run.start' })), { kind: 'running' });
@@ -31,7 +31,18 @@ test('run.fail → done ok:false', () => {
   assert.deepEqual(parseRunLine(JSON.stringify({ type: 'run.fail' })), { kind: 'done', ok: false });
 });
 
+test('run.kill → done ok:false', () => {
+  assert.deepEqual(parseRunLine(JSON.stringify({ type: 'run.kill' })), { kind: 'done', ok: false });
+});
+
 test('non-JSON / unknown → ignore', () => {
   assert.deepEqual(parseRunLine('not json'), { kind: 'ignore' });
   assert.deepEqual(parseRunLine(JSON.stringify({ type: 'whatever' })), { kind: 'ignore' });
+});
+
+test('resolveDone trusts a terminal event over the exit code', () => {
+  assert.deepEqual(resolveDone(true, false, 0), { ok: false });   // run.fail then exit 0
+  assert.deepEqual(resolveDone(true, true, 1), { ok: true });
+  assert.deepEqual(resolveDone(false, false, 0), { ok: true });   // no terminal → exit code
+  assert.deepEqual(resolveDone(false, false, 1), { ok: false });
 });
