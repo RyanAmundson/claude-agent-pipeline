@@ -20,16 +20,22 @@ export function encodeTextFrame(text) {
   return Buffer.concat([header, mask, masked]);
 }
 
+const MAX_FRAME = 16 * 1024 * 1024; // 16 MB sanity cap for loopback device traffic
+
 // Incrementally decode server → client frames. Server frames are unmasked.
 // Handles fragmentation across chunks; returns completed text messages.
 export class FrameDecoder {
-  constructor() { this.buf = Buffer.alloc(0); }
+  constructor() {
+    this.buf = Buffer.alloc(0);
+    this.fragments = [];
+  }
   push(chunk) {
     this.buf = Buffer.concat([this.buf, chunk]);
     const out = [];
     for (;;) {
       if (this.buf.length < 2) break;
       const b0 = this.buf[0], b1 = this.buf[1];
+      const fin = (b0 & 0x80) === 0x80;
       const opcode = b0 & 0x0f;
       const masked = (b1 & 0x80) === 0x80;
       let len = b1 & 0x7f;
@@ -41,6 +47,7 @@ export class FrameDecoder {
         if (this.buf.length < 10) break;
         len = Number(this.buf.readBigUInt64BE(2)); offset = 10;
       }
+      if (len > MAX_FRAME) throw new RangeError(`ws frame too large: ${len}`);
       const maskLen = masked ? 4 : 0;
       if (this.buf.length < offset + maskLen + len) break;
       let payload = this.buf.subarray(offset + maskLen, offset + maskLen + len);
@@ -51,8 +58,16 @@ export class FrameDecoder {
         payload = copy;
       }
       this.buf = this.buf.subarray(offset + maskLen + len);
-      if (opcode === 0x1) out.push(payload.toString('utf8')); // text
+      if (opcode === 0x1 || opcode === 0x0) {
+        // text frame or continuation frame — accumulate fragments
+        this.fragments.push(Buffer.from(payload));
+        if (fin) {
+          out.push(Buffer.concat(this.fragments).toString('utf8'));
+          this.fragments = [];
+        }
+      }
       // opcode 0x8 (close) / 0x9 (ping) / 0xA (pong) ignored for our local use
+      // (control frames must NOT touch this.fragments — they may interleave fragments)
     }
     return out;
   }
