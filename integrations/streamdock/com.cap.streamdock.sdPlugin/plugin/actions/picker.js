@@ -38,7 +38,7 @@ export function registerPickerAction(sd) {
   // Rotate the dial to move the highlight.
   sd.on('dialRotate', (ev) => {
     if (ev.action !== UUID || !projects.length) return;
-    const ticks = ev.payload?.ticks ?? 1;
+    const ticks = Math.trunc(ev.payload?.ticks ?? 1);
     index = (index + ticks % projects.length + projects.length) % projects.length;
     render();
   });
