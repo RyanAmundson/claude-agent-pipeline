@@ -10,6 +10,13 @@ function resolveTarget(settings) {
   return readState().activeProject;
 }
 
+function finish(sd, ctx, agent, ok) {
+  busy.delete(ctx);
+  sd.setImage(ctx, iconDataUri(ok ? 'pass' : 'fail'), 0);
+  sd.setTitle(ctx, ok ? 'done' : 'failed');
+  setTimeout(() => { sd.setImage(ctx, iconDataUri('idle'), 0); sd.setTitle(ctx, agent); }, 4000);
+}
+
 export function registerDispatchAction(sd) {
   sd.on('willAppear', (ev) => {
     if (ev.action !== UUID) return;
@@ -35,11 +42,8 @@ export function registerDispatchAction(sd) {
     run.events.on('state', (intent) => {
       if (intent.kind === 'activity') sd.setTitle(ctx, intent.activity.slice(0, 12));
     });
-    run.done.then(({ ok }) => {
-      busy.delete(ctx);
-      sd.setImage(ctx, iconDataUri(ok ? 'pass' : 'fail'), 0);
-      sd.setTitle(ctx, ok ? 'done' : 'failed');
-      setTimeout(() => { sd.setImage(ctx, iconDataUri('idle'), 0); sd.setTitle(ctx, agent); }, 4000);
-    });
+    run.done
+      .then(({ ok }) => finish(sd, ctx, agent, ok))
+      .catch(() => finish(sd, ctx, agent, false));
   });
 }
