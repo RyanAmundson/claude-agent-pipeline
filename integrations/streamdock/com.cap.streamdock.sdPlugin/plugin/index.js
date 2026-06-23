@@ -1,6 +1,6 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { connect } from './ws-client.js';
 
 // Stream Dock launches us with: -port N -pluginUUID U -registerEvent E -info JSON
@@ -12,6 +12,7 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv.slice(2));
 const logPath = join(homedir(), '.cap', 'streamdock-events.log');
+mkdirSync(dirname(logPath), { recursive: true });
 
 const ws = connect({
   port: Number(args.port),

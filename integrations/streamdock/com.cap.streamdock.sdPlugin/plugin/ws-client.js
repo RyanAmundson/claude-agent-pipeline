@@ -7,6 +7,7 @@ export function connect({ port, onOpen, onMessage, onClose }) {
   const sock = net.connect(port, '127.0.0.1');
   const decoder = new FrameDecoder();
   let upgraded = false;
+  let headerBuf = Buffer.alloc(0);
 
   sock.on('connect', () => {
     sock.write(
@@ -21,11 +22,13 @@ export function connect({ port, onOpen, onMessage, onClose }) {
 
   sock.on('data', (chunk) => {
     if (!upgraded) {
-      const headerEnd = chunk.indexOf('\r\n\r\n');
+      headerBuf = Buffer.concat([headerBuf, chunk]);
+      const headerEnd = headerBuf.indexOf('\r\n\r\n');
       if (headerEnd === -1) return;
       upgraded = true;
       onOpen && onOpen();
-      const rest = chunk.subarray(headerEnd + 4);
+      const rest = headerBuf.subarray(headerEnd + 4);
+      headerBuf = Buffer.alloc(0);
       if (rest.length) for (const m of decoder.push(rest)) onMessage(m);
       return;
     }
