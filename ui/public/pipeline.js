@@ -10,6 +10,8 @@ import {
   backPressureByNode, provisioningEvents, dispatchEdgeId,
 } from './pipeline-graph.js';
 import { colorForAgent } from './colors.js';
+import { buildAgentsBand } from './graph-render.js';
+import { bandLayout } from './agents-band-graph.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -109,6 +111,12 @@ function buildGraph() {
   nodeLayer.append(legend);
 
   svg.append(edgeLayer, tokenLayer, nodeLayer);
+
+  // Agents band: the off-spine fleet the orchestrator dispatches, stacked in
+  // columns under the spine stage each agent works at (so a tall column shows
+  // where work concentrates). Appended into the same SVG beneath the spine.
+  const { chips, feeds } = bandLayout(NODES);
+  buildAgentsBand(svg, { chips, feeds, spineNodes: NODES });
   return true;
 }
 

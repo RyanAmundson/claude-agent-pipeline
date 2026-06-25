@@ -75,15 +75,27 @@ main {
 .line.type-system .body { color: var(--dim); }
 .line.type-user .body { color: var(--dim); }
 
-/* ─── view toggling (3 panels) ───────────────────────────────────────── */
+/* ─── view toggling (4 panels) ───────────────────────────────────────── */
 body[data-view="log"]      #pipeline,
 body[data-view="log"]      #agents,
+body[data-view="log"]      #features,
 body[data-view="agents"]   #pipeline,
 body[data-view="agents"]   #log,
+body[data-view="agents"]   #features,
 body[data-view="pipeline"] #log,
-body[data-view="pipeline"] #agents { display: none; }
+body[data-view="pipeline"] #agents,
+body[data-view="pipeline"] #features,
+body[data-view="features"] #pipeline,
+body[data-view="features"] #log,
+body[data-view="features"] #agents { display: none; }
 
 body:not([data-view="log"]) .log-only { display: none; }
+
+/* ─── features drill-in panel ────────────────────────────────────────── */
+.feature-drill { margin: 0.5rem 0; padding: 0.5rem; border: 1px solid var(--line); border-radius: 6px; }
+.feature-epic { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.25rem 0; }
+.feature-epic-id { font-weight: 600; margin-right: 0.35rem; }
+.feature-child-chip { font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
 
 /* ─── agents reference ───────────────────────────────────────────────── */
 #agents {
@@ -227,10 +239,14 @@ body:not([data-view="log"]) .log-only { display: none; }
 .pl-edge.kind-park    { stroke: var(--dim); stroke-dasharray: 2 3; opacity: 0.6; }
 .pl-edge.kind-regen   { stroke: var(--dim); stroke-dasharray: 1 5; opacity: 0.35; }
 .pl-edge.kind-feed    { stroke: var(--dim); stroke-dasharray: 1 4; opacity: 0.3; }
+.pl-edge.kind-feedback { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 2 5; opacity: 0.6; fill: none; }
 /* orchestrator dispatch lines: invisible until the orchestrator provisions an
    agent at that stage, then the line lights green for the token's travel. */
 .pl-edge.kind-dispatch        { stroke: var(--ok); stroke-dasharray: 2 5; opacity: 0; }
 .pl-edge.kind-dispatch.active { opacity: 0.4; transition: opacity 0.15s; }
+/* agents-band feeds: very faint ambient links from an off-spine agent chip up to
+   the stage it acts on — context, not focus. */
+.pl-edge.kind-bandfeed { stroke: var(--dim); stroke-dasharray: 1 4; opacity: 0.13; fill: none; }
 .pl-edge.flash        { stroke: var(--text); opacity: 1; transition: stroke 0.1s, opacity 0.1s; }
 
 /* nodes */
@@ -243,6 +259,14 @@ body:not([data-view="log"]) .log-only { display: none; }
 .pl-node.kind-entry  .pl-node-box { stroke: var(--dim); stroke-dasharray: 3 3; }
 .pl-node.kind-feeder .pl-node-box { fill: transparent; stroke: var(--dim); stroke-dasharray: 2 3; opacity: 0.7; }
 .pl-node.kind-meta   .pl-node-box { fill: #1a1f2b; stroke: var(--accent); }
+/* agents-band chips: compact, dimmer than spine nodes (they're the supporting
+   fleet, not the main flow). Smaller label fits the narrower box. */
+.pl-node.kind-agent  .pl-node-box   { fill: #141925; stroke: var(--line); opacity: 0.92; }
+.pl-node.kind-agent  .pl-node-label { font-size: 8px; font-weight: 500; fill: var(--dim); }
+/* merge agent: an action node, not a reviewer — green like the exit/merge path,
+   to signal it lands the (agent-mergeable) PR. */
+.pl-node.kind-merge  .pl-node-box   { fill: #141f17; stroke: var(--ok); opacity: 0.95; }
+.pl-node.kind-merge  .pl-node-label { font-size: 8px; font-weight: 600; fill: var(--ok); }
 .pl-node-label { fill: var(--text); font-size: 13px; font-weight: 600; text-anchor: middle; }
 .pl-node-agent { fill: var(--dim);  font-size: 10px; text-anchor: middle; }
 .pl-node-count {
@@ -292,3 +316,23 @@ body:not([data-view="log"]) .log-only { display: none; }
   .pl-node.running .pl-node-box { animation: none; }
   .pl-node.pressure .pl-node-pressure { animation: none; }
 }
+
+/* feature-pipeline tab (epic view): coexists with the features-as-tickets tab.
+   Hide every other panel when it is active, and hide #feature-pipeline in all other views. */
+body[data-view="feature-pipeline"] #pipeline,
+body[data-view="feature-pipeline"] #log,
+body[data-view="feature-pipeline"] #agents,
+body[data-view="feature-pipeline"] #features,
+body[data-view="pipeline"] #feature-pipeline,
+body[data-view="log"]      #feature-pipeline,
+body[data-view="agents"]   #feature-pipeline,
+body[data-view="features"] #feature-pipeline { display: none; }
+
+#feature-pipeline-epics { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.epic-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.epic-title { color: var(--text); font-weight: 600; }
+.epic-prog { color: var(--ok); }
+.epic-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.child-chip { font-size: 11px; color: var(--dim); border: 1px solid var(--line);
+  border-radius: 10px; padding: 1px 7px; }

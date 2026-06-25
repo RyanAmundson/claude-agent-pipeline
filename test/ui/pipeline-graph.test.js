@@ -288,3 +288,28 @@ test('every stage has an orchestrator dispatch edge', () => {
     assert.equal(edge.from, 'orchestrator');
   }
 });
+
+// ─── conflict-resolver detour ───────────────────────────────────────────────
+test('needs-conflict-resolution node exists with conflict-resolver as its agent', () => {
+  const n = NODES['needs-conflict-resolution'];
+  assert.ok(n, 'needs-conflict-resolution node missing');
+  assert.equal(n.agent, 'conflict-resolver');
+  assert.equal(n.state, 'needs-conflict-resolution');
+});
+
+test('the conflict detour and return are wired both ways', () => {
+  assert.deepEqual(pathEdgesForMove('ready-for-human', 'needs-conflict-resolution'), ['conflict:detour']);
+  assert.deepEqual(pathEdgesForMove('needs-conflict-resolution', 'ready-for-human'), ['conflict:resolved']);
+});
+
+test('conflict-resolver has a home node and a dispatch edge', () => {
+  assert.equal(agentHomeNodes()['conflict-resolver'], 'needs-conflict-resolution');
+  const d = EDGES.find(e => e.id === 'dispatch:needs-conflict-resolution');
+  assert.ok(d, 'dispatch edge missing');
+  assert.equal(d.from, 'orchestrator');
+  assert.equal(d.to, 'needs-conflict-resolution');
+});
+
+test('VIEW is tall enough for the spine plus the agents band', () => {
+  assert.ok(VIEW.h >= 720, `VIEW.h is ${VIEW.h}, expected >= 720`);
+});

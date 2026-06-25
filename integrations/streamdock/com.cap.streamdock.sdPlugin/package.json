@@ -1,0 +1,5 @@
+{
+  "name": "com.cap.streamdock.sdplugin",
+  "private": true,
+  "type": "module"
+}

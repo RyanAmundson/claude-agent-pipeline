@@ -1,0 +1,23 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Project Picker</title></head>
+<body>
+  <label>Project roots (comma-separated)
+    <input id="roots" placeholder="~/Code"></label>
+  <script>
+    let ws, ctx, settings = {};
+    function connectElgatoStreamDeckSocket(port, uuid, event) {
+      ctx = uuid; ws = new WebSocket('ws://127.0.0.1:' + port);
+      ws.onopen = () => ws.send(JSON.stringify({ event, uuid }));
+      ws.onmessage = (e) => {
+        const m = JSON.parse(e.data);
+        if (m.event === 'didReceiveSettings') {
+          settings = m.payload.settings || {};
+          if (settings.roots) document.getElementById('roots').value = settings.roots;
+        }
+      };
+    }
+    document.addEventListener('input', () => {
+      settings.roots = document.getElementById('roots').value;
+      ws.send(JSON.stringify({ event: 'setSettings', context: ctx, payload: settings }));
+    });
+  </script>
+</body></html>

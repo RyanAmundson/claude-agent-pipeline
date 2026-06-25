@@ -21,10 +21,13 @@ pipeline:needs-review          ?    → dispatch ticket-reviewer
 pipeline:needs-work            ?    → dispatch worker
 pipeline:needs-test-review     ?    → dispatch tester
 pipeline:needs-code-review     ?    → dispatch code-reviewer
+pipeline:needs-detector-gate   ?    → run runner/detector-gate.js (diff-mode detector panel)
 pipeline:needs-regression-check   ?    → dispatch regression-tester
 pipeline:needs-feature-validation ?    → dispatch feature-validator
 pipeline:needs-feedback        ?    → dispatch feedback-responder
+pipeline:needs-conflict-resolution ? → dispatch conflict-resolver
 pipeline:ready-for-human       ?    → (the owner's queue — no dispatch)
+  └ + pipeline:agent-mergeable  ?    → dispatch merge-agent (only when config.merge.enabled)
 blocked-by:*                   ?    → (waiting — no dispatch)
 ```
 
@@ -33,6 +36,7 @@ Sources:
 - Linear: query for issues with `pipeline:*` labels for ticket pipeline states
 - Linear backlog: query for Backlog/Todo issues assigned to the owner — these are ready for workers even without `pipeline:needs-work` labels
 - Linear unassigned: query for Backlog/Todo issues with NO assignee on the configured team — many UI tickets land unassigned and are invisible to the pipeline. Workers should self-assign before starting. Filter via `excludeProjects` and `excludeLabels` in `.pipeline/config.json`
+- Feature epics: scan `.pipeline/epics/<state>/` (filesystem) or `feature:*` labels (GitHub/Linear) — every cycle, alongside tickets
 
 **Exclude draft PRs entirely (GitHub mode).** A draft is work-in-progress the owner has explicitly parked — it is not ready for review or merge. Drop every `isDraft: true` PR *before* counting states, *before* the owner-comment scan, and *before* every anomaly/auto-recovery check in §"Anomaly recovery" (label mismatch, conflicts, behind-main, CI-red, label-without-audit, etc.). A draft never counts toward `ready-for-human` (or any pipeline state) and is never a dispatch target — not for branch-updater, conflict-resolver, ci-triage, feedback-responder, or any review agent. It re-enters the pipeline only once the owner marks it ready-for-review. (This matches the per-agent "Skip drafts" filters already in tester/regression-tester/feature-validator/flex-worker; the orchestrator is the one place that was still counting them.)
 
@@ -72,17 +76,22 @@ Dispatch mapping:
 | `pipeline:needs-work` | worker | `.agents/worker.md` |
 | `pipeline:needs-test-review` | tester | `.agents/tester.md` |
 | `pipeline:needs-code-review` | code-reviewer | `.agents/code-reviewer.md` |
+| `pipeline:needs-detector-gate` (only when `config.detectors.diffGate.enabled`, default true) | `runner/detector-gate.js` (diff-mode detector fan-out) | — |
 | `pipeline:needs-regression-check` | regression-tester | `.agents/regression-tester.md` |
 | `pipeline:needs-feature-validation` | feature-validator | `.agents/feature-validator.md` |
 | `pipeline:needs-feedback` | feedback-responder | `.agents/feedback-responder.md` |
+| `pipeline:needs-conflict-resolution` | conflict-resolver | `.agents/conflict-resolver.md` |
 | Staleness-gated `needs-work` ticket or `ready-for-human` item (only when `relevance.enabled`) | relevance-checker | `.agents/relevance-checker.md` |
 | `pipeline:ready-for-human` (behind main) | branch-updater | `.agents/branch-updater.md` |
+| `pipeline:ready-for-human` + `pipeline:agent-mergeable` (only when `config.merge.enabled`) | merge-agent | `.agents/merge-agent.md` |
 | PR touches stats/dashboard/aggregation | data-validator | `.agents/data-validator.md` |
 | Every 2 hours | data-validator (full sweep) | `.agents/data-validator.md` |
 | Agent report mentions undefined term, or PR introduces new domain terminology, or ticket uses term that conflicts with glossary | glossary-maintainer | `.agents/glossary-maintainer.md` |
 | Every 7 days | glossary-maintainer (periodic audit) | `.agents/glossary-maintainer.md` |
+| `pipelineEvaluation.enabled` and any threshold tripped since the `.pipeline/improvement/cursor.json` baseline (completed runs ≥ `cadence`, OR new lessons ≥ `minNewLessons`, OR merged improvement PRs ≥ `minImproverMerges`) | pipeline-evaluator | `.agents/pipeline-evaluator.md` |
+| `capability-gap` findings/tickets exist (requires `pipelineEvaluation.enabled`) | agent-architect | `.agents/agent-architect.md` |
 | Any open ${GH_USER} PR has a failing CI check (via `gh pr checks`) | ci-triage | `.agents/ci-triage.md` |
-| Round-robin detector slot (one per cycle) | a11y-detector → perf-detector → pipeline-violation-detector → mock-contract-detector → density-system-detector → justification-detector → (back to a11y) | `.agents/<detector>.md` |
+| Round-robin detector slot (one per cycle) | a11y-detector → perf-detector → pipeline-violation-detector → mock-contract-detector → density-system-detector → justification-detector → supply-chain-detector → access-control-detector → injection-detector → data-protection-detector → (back to a11y) | `.agents/<detector>.md` |
 | PR enters `pipeline:needs-code-review` | justification-detector (PR-mode, alongside code-reviewer) | `.agents/justification-detector.md` |
 | `package.json` changes in any open PR (new dep) | justification-detector | `.agents/justification-detector.md` |
 | Every cycle (always on) | security-detector | `.agents/security-detector.md` |
@@ -92,8 +101,16 @@ Dispatch mapping:
 | PR merged touching auth/config/env files | security-detector | — |
 | PR merged touching `*.api.ts`, `*.api.mock.ts`, `*.api.schema.ts`, `*.api.types.ts`, or density fixtures | mock-contract-detector | — |
 | PR merged adding `*.api.ts`, or adding `.tsx` in `[components]/` / `[pages]/` | density-system-detector | — |
+| Any open PR changes `package.json` or a lockfile (added/updated dependency) | supply-chain-detector | `.agents/supply-chain-detector.md` |
+| PR merged adding/editing route handlers, server actions, or authz middleware, or introducing a role/permission/tenant concept | access-control-detector | — |
+| PR merged touching server handlers, DB queries, or `child_process`/`fs`/`fetch` usage (new injection sinks) | injection-detector | — |
+| PR merged touching logging/telemetry, cookie/session config, or response-header/CSP/CORS config, or adding an external `<script>`/`<link>` | data-protection-detector | — |
 
 For stages with multiple items, dispatch multiple agents of the same role — each works a different item.
+
+**Finding-type routing (`domain:pipeline-improvement`).** These findings route by type, not all to one agent: `improvement-finding` (from transcript-reviewer) and `improvement-regression` (from pipeline-evaluator) → `agent-improver`; `capability-gap` (from pipeline-evaluator) → `agent-architect`; `strategy-finding` (from pipeline-evaluator) stays in `pipeline:needs-triage` for the human (no auto-dispatch).
+
+- **`pipeline:needs-detector-gate`** (only when `config.detectors.diffGate.enabled`, default true): trigger `runner/detector-gate.js` for the PR. It fans out the diff-mode detectors whose glob+prefilter match the PR's changed files, persists `.pipeline/reviews/<pr>/detector-*.json`, and computes the severity gate: any `blocker`/`major` (or any `veto`) → re-label `pipeline:needs-feedback` (feedback-responder consumes it); otherwise advance to the next state (`pipeline:needs-regression-check`, or `pipeline:ready-for-human` if the regression/feature gates are disabled). When `diffGate.enabled` is false, `code-reviewer` advances straight past this state with no panel.
 
 ### 3.5. Self-Audit (every cycle)
 
@@ -160,7 +177,7 @@ This appends the cycle to `.pipeline/runs/cycles.jsonl`, which feeds `agent-pipe
 ## What NOT to Do
 
 - Do NOT create new cron jobs — dispatched agents are one-shot
-- Do NOT dispatch for `pipeline:ready-for-human` — that's the owner's queue
+- Do NOT dispatch for `pipeline:ready-for-human` — that's the owner's queue. **One exception**: a ready-for-human PR that ALSO carries `pipeline:agent-mergeable` AND `config.merge.enabled` is true → dispatch merge-agent (it re-verifies every gate and is throughput-capped; it merges or hands back). Branch-updater (behind-main) still applies as before.
 - Do NOT dispatch for `blocked-by` PRs — they're waiting intentionally
 - Do NOT exceed 5 agents per cycle
 - Do NOT dispatch for stages already being worked (check for recent `agent:*` comments < 15 min old to avoid double-dispatching)
@@ -174,12 +191,50 @@ The feedback-responder is on-demand like other agents, but has an additional tri
 - If ANY unresolved the owner comment exists → dispatch feedback-responder immediately, even if the PR has no `pipeline:needs-feedback` label
 - the owner's comments are the highest priority dispatch — always dispatch feedback-responder before other roles
 
+## Feature pipeline (epics)
+
+Each cycle, after the ticket pipeline snapshot, also scan feature epics and run the building monitor. Feature epics are read from `.pipeline/epics/<state>/` (filesystem backend) or from `feature:*` labels on tracking issues (GitHub/Linear backend).
+
+### Dispatch feature agents
+
+When the corresponding epic queue is non-empty, dispatch the feature agent for that state (subject to the global 5-agent-per-cycle cap shared with ticket-pipeline agents):
+
+| State | Agent | Prompt source |
+|---|---|---|
+| `feature:needs-spec` | feature-spec-writer | `.agents/feature-spec-writer.md` |
+| `feature:needs-design` | feature-architect | `.agents/feature-architect.md` |
+| `feature:needs-decomposition` | feature-decomposer | `.agents/feature-decomposer.md` |
+| `feature:needs-integration` | feature-integrator | `.agents/feature-integrator.md` |
+| `feature:needs-acceptance` | feature-acceptance-validator | `.agents/feature-acceptance-validator.md` |
+
+### Building monitor (for `feature:building` epics)
+
+For each epic currently in the `building` state, run three monitoring duties each cycle (exact commands are in `agents/FEATURE-PIPELINE.md` §Dependency gating and §Child auto-merge):
+
+1. **Dependency gating** — for every child in `needs-info/`, check if all ids in its `depends_on` list are in `done`. If so, promote the child to `needs-work` so it starts flowing through the ticket pipeline.
+
+2. **Child auto-merge** — when a child ticket whose JSON carries an `epic` field reaches `ready-for-human`, merge it into the epic's `integration_branch` (no per-child human gate) and move the child to `done`. On a merge conflict, route the child to `needs-conflict-resolution` instead.
+
+3. **Advance when all children done** — when every id in the epic's `children` list is in `done`, advance the epic from `building` → `needs-integration`.
+
+### Feedback routing for `feature:needs-feedback`
+
+When a `feature:needs-feedback` epic exists (human left comments on the epic PR), dispatch `feedback-responder` to address the comments and route the epic back to the relevant stage per `agents/FEATURE-PIPELINE.md`. This follows the same "highest priority" rule as the ticket-pipeline feedback-responder — dispatch it before other feature agents in that cycle.
+
+See `agents/FEATURE-PIPELINE.md` for the full state machine and the exact merge/transition commands.
+
 ## Periodic Agents
 
 These agents don't have their own loops — the orchestrator dispatches them on a cadence:
 
-- **Specialized detectors** (a11y, perf, pipeline-violation, mock-contract, density-system, justification, security): Dispatch per the table above. **Security runs every cycle.** The other six rotate round-robin — one per cycle — using this state: the last dispatched detector's name is in `.pipeline/runs/cycles.jsonl` (the last entry's `dispatched` list) or can be derived from finding filenames (most recent file in `.pipeline/findings/` tells you what just ran). Pick the next in the rotation: `a11y → perf → pipeline-violation → mock-contract → density-system → justification → a11y`. Note: `justification-detector` also runs in PR-mode whenever a PR enters `pipeline:needs-code-review` (see dispatch table) — its sweep-mode round-robin slot is for codebase-wide pattern findings only.
-- **General scanner (catch-all)**: Dispatch once per ~5 cycles ONLY for things the specialized detectors don't cover (dead code, test quality, outdated patterns, terminology drift). Instruct the scanner to SKIP anything the specialized detectors would find — pass it the list of detector responsibilities. Still respect the same 25-PR saturation backoff.
+- **Specialized detectors** (a11y, perf, pipeline-violation, mock-contract, density-system, justification, security, supply-chain, access-control, injection, data-protection): Dispatch per the table above. **Security runs every cycle.** The other ten rotate round-robin — one per cycle — using this state: the last dispatched detector's name is in `.pipeline/runs/cycles.jsonl` (the last entry's `dispatched` list) or can be derived from finding filenames (most recent file in `.pipeline/findings/` tells you what just ran). Pick the next in the rotation: `a11y → perf → pipeline-violation → mock-contract → density-system → justification → supply-chain → access-control → injection → data-protection → a11y`. Note: `justification-detector` also runs in PR-mode whenever a PR enters `pipeline:needs-code-review` (see dispatch table) — its sweep-mode round-robin slot is for codebase-wide pattern findings only. The four security-slice detectors (supply-chain, access-control, injection, data-protection) carve distinct surfaces out of `security-detector`, which now focuses on inline secrets, DOM-XSS, and postMessage — so they don't double-file against each other or against security.
+- **Registry detectors (glob-matched sweep)**: The per-rule detectors in `detectors.registry.json` are dispatched by changed files, not round-robin. Each cycle:
+  1. Compute changed files since the last scan cursor: `git diff --name-only <lastScan>..main` (the cursor is the commit SHA recorded in `.pipeline/runs/last-scan` after the previous sweep).
+  2. Load `detectors.registry.json`; using the same glob + prefilter logic as `runner/detector-match.js`, find detectors (`mode` = `sweep` or `both`) whose glob matches a changed file AND whose `prefilterPattern` appears in it.
+  3. Dispatch ONLY those detectors in sweep-mode against the matched files (subject to the existing `maxAgentsPerCycle` cap and the 25-PR saturation backoff).
+  4. After the sweep, write the current `main` SHA to `.pipeline/runs/last-scan`.
+- **Periodic full sweep**: Every `config.detectors.fullSweepEveryNCycles` (default 20) cycles, ignore the cursor and run all `sweep`/`both` registry detectors whose prefilter matches anywhere under their glob in `src/`. This backstops detectors added since the last cursor and any cursor gaps.
+- **General scanner is retired as a catch-all** — see the frontier-scanner role in `agents/scanner.md`; dispatch it only per its own (reduced) trigger.
 - **Detector saturation backoff**: if `pipeline:ready-for-human` has **≥ 25 open PRs**, skip ALL detectors (including security) for that cycle — the owner is the bottleneck and piling on new findings makes it worse. Below 25, dispatch per schedule. Exception: never skip security if a critical finding was escalated in the previous cycle and is still unremediated.
 - **cleanup**: Dispatch if any PRs have been merged since the last cleanup, or if there are stale worktrees/branches/labels to audit.
 
@@ -207,7 +262,7 @@ Every cycle, after the pipeline snapshot, check for anomalies and auto-recover:
 |---|---|---|
 | **Missing pipeline label** | Open PR by ${GH_USER} has no `pipeline:*` label | Infer correct state from agent comments and apply label |
 | **Label mismatch** | PR labeled `ready-for-human` but has unresolved the owner comments | Downgrade to `pipeline:needs-feedback` |
-| **Conflicts on ready PR** | PR labeled `ready-for-human` but `mergeable=CONFLICTING` | Downgrade to `pipeline:needs-feedback`, dispatch feedback-responder |
+| **Conflicts on ready PR** | PR labeled `ready-for-human` but `mergeable=CONFLICTING` | Downgrade to `pipeline:needs-conflict-resolution`, dispatch conflict-resolver |
 | **Stale PR state** | Reporting a PR as open when it's merged/closed | Always verify PR state from GitHub API each cycle, never rely on cached data |
 | **Partial comment resolution** | the owner's multi-point comment has `[agent:feedback-responder] Addressed` reply but not all points were covered | Check each bullet/point in the owner's comment against the resolution — if any point is unaddressed, keep as needs-feedback |
 | **Behind-main on ready PR** | PR labeled `ready-for-human` but `mergeStateStatus=BEHIND` | Dispatch branch-updater to merge main |

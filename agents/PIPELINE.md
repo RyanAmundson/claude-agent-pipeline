@@ -35,6 +35,8 @@ The label namespace is configurable — defaults below assume `labelNamespace = 
 | `pipeline:needs-regression-check` | Code review passed; needs regression validation | regression-tester |
 | `pipeline:needs-feature-validation` | Regression passed; needs feature/acceptance validation | feature-validator |
 | `pipeline:needs-feedback` | Review feedback needs addressing | feedback-responder |
+| `pipeline:needs-conflict-resolution` | PR branch conflicts with main, needs a merge resolution. Replaces `pipeline:ready-for-human` while outstanding — a conflicted PR is not mergeable, so it leaves the human-review queue until the conflict-resolver clears it | conflict-resolver |
+| `pipeline:resolving-conflicts` | conflict-resolver has claimed the PR and is resolving (lock) | conflict-resolver |
 | `pipeline:ready-for-human` | All automated checks pass, ready for human review | (terminal) |
 | `needs-info` | Ticket lacks detail, parked until creator updates | ticket-reviewer |
 | `obsolete` | Retired as no longer relevant (distinct from `done` = merged) | relevance-checker (via orchestrator) |
@@ -57,9 +59,12 @@ Each agent stamps its work with a provenance label so you can see who did what. 
 | `agent:flex-worker` | Flex worker filled in (note which role) |
 | `agent:orchestrator` | Orchestrator dispatched flex workers for bottleneck |
 | `agent:branch-updater` | Branch updater synced branch with main |
+| `agent:conflict-resolver` | Conflict resolver merged main and resolved conflicts |
 | `agent:cleanup` | Cleanup agent removed worktree/branch/labels |
 | `agent:transcript-reviewer` | Transcript reviewer logged a lesson / filed an improvement finding |
 | `agent:agent-improver` | Agent improver changed an agent/rule/doc definition |
+| `agent:pipeline-evaluator` | Pipeline evaluator wrote a scorecard entry or filed an improvement-regression / capability-gap / strategy-finding |
+| `agent:agent-architect` | Agent architect created/retired an agent or changed topology (see ledger.jsonl) |
 | `agent:dead-code-remover` | Dead-code remover deleted confirmed-dead code |
 | `agent:code-simplifier` | Code simplifier reduced complexity behavior-preservingly |
 | `agent:relevance-checker` | Relevance checker judged an item's continued relevance |
@@ -137,6 +142,7 @@ The human's manual interventions are the pipeline's training signal. The goal is
 | regression-tester | `pipeline:needs-regression-check` items exist |
 | feature-validator | `pipeline:needs-feature-validation` items exist |
 | feedback-responder | `pipeline:needs-feedback` items or unresolved human comments exist |
+| conflict-resolver | `pipeline:needs-conflict-resolution` items, or open PRs that conflict with main |
 | relevance-checker | `relevance.enabled` and a staleness-gated `needs-work`/`ready-for-human` item exists |
 | branch-updater | `pipeline:ready-for-human` PRs that are behind main |
 | scanner | No scan in the last 30 minutes |
@@ -144,6 +150,8 @@ The human's manual interventions are the pipeline's training signal. The goal is
 | flex-worker | Any stage is bottlenecked (3+ items) |
 | transcript-reviewer | `transcriptReview.cadence` completed runs have accumulated since its cursor, or a human intervention occurred |
 | agent-improver | `domain:pipeline-improvement` findings/tickets exist (routed here instead of the generic worker) |
+| pipeline-evaluator | `pipelineEvaluation.enabled` is `true` AND any threshold tripped since cursor (`cadence` runs, `minNewLessons` lessons, or `minImproverMerges` merged improvement PRs) |
+| agent-architect | `capability-gap` findings/tickets exist (routed here; requires `pipelineEvaluation.enabled`) |
 | dead-code-remover | `domain:dead-code` findings/tickets exist (routed here instead of the generic worker) |
 
 `code-simplifier` is not in this table — like `declarative-refactor-specialist`, it is **loop-based** (`consumes: loop-tick`), run on its own cadence (`/loop 30m code-simplifier`) rather than dispatched off a queue state.

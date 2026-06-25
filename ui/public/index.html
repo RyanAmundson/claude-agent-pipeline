@@ -13,6 +13,8 @@
     <button class="tab" data-tab="pipeline" role="tab" aria-selected="true">pipeline</button>
     <button class="tab" data-tab="log" role="tab" aria-selected="false">live log</button>
     <button class="tab" data-tab="agents" role="tab" aria-selected="false">agents</button>
+    <button class="tab" data-tab="features" role="tab" aria-selected="false">features</button>
+    <button class="tab" data-tab="feature-pipeline" role="tab" aria-selected="false">feature pipeline</button>
   </nav>
   <div class="controls">
     <label class="log-only"><input type="checkbox" id="autoscroll" checked> auto-scroll</label>
@@ -37,6 +39,21 @@
       <span id="agents-status" class="dim">loading…</span>
     </div>
     <div id="agents-list"></div>
+  </section>
+  <section id="features" data-panel="features" aria-live="polite">
+    <svg id="feature-graph" viewBox="0 0 1260 720"
+         preserveAspectRatio="xMidYMid meet" role="img"
+         aria-label="feature pipeline flow"></svg>
+    <p id="feature-empty" class="dim" hidden>No features in flight yet — feature tickets will appear here as epics enter the pipeline.</p>
+    <div id="feature-drill" class="feature-drill" hidden></div>
+    <p id="feature-status" class="dim" aria-live="polite">loading…</p>
+  </section>
+  <section id="feature-pipeline" data-panel="feature-pipeline" aria-live="polite">
+    <svg id="feature-pipeline-graph" viewBox="0 0 1180 420"
+         preserveAspectRatio="xMidYMid meet" role="img"
+         aria-label="feature pipeline (epic) flow"></svg>
+    <p id="feature-pipeline-status" class="dim" aria-live="polite">loading…</p>
+    <div id="feature-pipeline-epics"></div>
   </section>
 </main>
 <script src="/app.js" type="module"></script>
