@@ -29,10 +29,18 @@ test('the ticket-reviewer sits under review, not code-review', () => {
   assert.equal(tr.stage, 'needs-review');
 });
 
-test('the detector panel concentrates under code-review', () => {
+test('the review fleet concentrates under code-review', () => {
   const atCodeReview = BAND_AGENTS.filter(a => a.stage === 'needs-code-review');
-  // 10 detectors (security works at triage) + the two data reviewers.
-  assert.equal(atCodeReview.length, 12, `expected 12 agents at code-review, got ${atCodeReview.length}`);
+  // 10 detectors (security works at triage) + 2 data reviewers + simplify.
+  assert.equal(atCodeReview.length, 13, `expected 13 agents at code-review, got ${atCodeReview.length}`);
+  assert.ok(atCodeReview.some(a => a.id === 'simplify'), 'simplify should gate at code-review');
+});
+
+test('the merge agent lands agent-mergeable PRs at the ready stage', () => {
+  const merge = BAND_AGENTS.find(a => a.id === 'merge-agent');
+  assert.ok(merge, 'merge-agent missing from the band');
+  assert.equal(merge.stage, 'ready-for-human');
+  assert.equal(merge.kind, 'merge', 'merge agent should carry the distinct merge kind');
 });
 
 test('bandLayout anchors each chip under its stage x, in a downward column', () => {

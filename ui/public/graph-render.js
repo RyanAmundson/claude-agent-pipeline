@@ -87,7 +87,7 @@ export function buildAgentsBand(svg, { chips, feeds, spineNodes }) {
   for (const [id, n] of Object.entries(chips)) {
     const w = n.w || 104;
     const h = n.h || 16;
-    const g = el('g', { class: 'pl-node kind-agent', 'data-node': id, transform: `translate(${n.x},${n.y})` });
+    const g = el('g', { class: `pl-node kind-${n.kind || 'agent'}`, 'data-node': id, transform: `translate(${n.x},${n.y})` });
     const title = el('title');
     title.textContent = n.agent;
     g.append(title);

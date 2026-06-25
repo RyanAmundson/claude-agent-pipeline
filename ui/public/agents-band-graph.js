@@ -46,7 +46,8 @@ export const BAND_AGENTS = [
   { id: 'e2e-test-runner',      label: 'e2e-runner',  stage: 'needs-test-review' },
   { id: 'e2e-test-quality',     label: 'e2e-quality', stage: 'needs-test-review' },
 
-  // code-review — the whole detector panel + data reviewers gate here
+  // code-review — the whole detector panel + data reviewers + proportionality
+  // (simplify) gate here
   { id: 'a11y-detector',               label: 'a11y',          stage: 'needs-code-review' },
   { id: 'perf-detector',               label: 'perf',          stage: 'needs-code-review' },
   { id: 'access-control-detector',     label: 'access-ctrl',   stage: 'needs-code-review' },
@@ -59,13 +60,16 @@ export const BAND_AGENTS = [
   { id: 'pipeline-violation-detector', label: 'pipeline-viol', stage: 'needs-code-review' },
   { id: 'data-validator',              label: 'data-valid',    stage: 'needs-code-review' },
   { id: 'data-fidelity-reviewer',      label: 'data-fidelity', stage: 'needs-code-review' },
+  { id: 'simplify',                    label: 'simplify',      stage: 'needs-code-review' },
 
   // regression — CI-failure triage rides the verification gate
   { id: 'ci-triage',            label: 'ci-triage',   stage: 'needs-regression-check' },
 
-  // ready-for-human — keep the branch current + ship the docs
+  // ready-for-human — keep the branch current, ship the docs, and (for PRs
+  // explicitly tagged agent-mergeable) the merge agent lands them
   { id: 'branch-updater',          label: 'branch-upd', stage: 'ready-for-human' },
   { id: 'technical-docs-manager',  label: 'docs',       stage: 'ready-for-human' },
+  { id: 'merge-agent',             label: 'merge',      stage: 'ready-for-human', kind: 'merge' },
 ];
 
 // Lay the agents out into columns anchored under their spine stage. Pure: given
@@ -90,7 +94,7 @@ export function bandLayout(spineNodes, top = BAND_TOP) {
         y: top + i * ROW_STEP,
         w: CHIP_W,
         h: CHIP_H,
-        kind: 'agent',
+        kind: a.kind || 'agent',
       };
     });
     const bottom = list[list.length - 1].id;

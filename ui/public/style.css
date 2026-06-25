@@ -263,6 +263,10 @@ body:not([data-view="log"]) .log-only { display: none; }
    fleet, not the main flow). Smaller label fits the narrower box. */
 .pl-node.kind-agent  .pl-node-box   { fill: #141925; stroke: var(--line); opacity: 0.92; }
 .pl-node.kind-agent  .pl-node-label { font-size: 8px; font-weight: 500; fill: var(--dim); }
+/* merge agent: an action node, not a reviewer — green like the exit/merge path,
+   to signal it lands the (agent-mergeable) PR. */
+.pl-node.kind-merge  .pl-node-box   { fill: #141f17; stroke: var(--ok); opacity: 0.95; }
+.pl-node.kind-merge  .pl-node-label { font-size: 8px; font-weight: 600; fill: var(--ok); }
 .pl-node-label { fill: var(--text); font-size: 13px; font-weight: 600; text-anchor: middle; }
 .pl-node-agent { fill: var(--dim);  font-size: 10px; text-anchor: middle; }
 .pl-node-count {
