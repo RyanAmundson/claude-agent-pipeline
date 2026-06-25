@@ -1,0 +1,40 @@
+{
+  "SDKVersion": 1,
+  "Author": "CAP",
+  "Name": "CAP",
+  "Description": "Dispatch claude-agent-pipeline agents from your Stream Dock.",
+  "Category": "CAP",
+  "CategoryIcon": "icons/category",
+  "Icon": "icons/category",
+  "Version": "0.1.0",
+  "CodePathMac": "plugin/index.js",
+  "CodePathWin": "plugin/index.js",
+  "OS": [{ "Platform": "mac", "MinimumVersion": "10.15" }],
+  "Software": { "MinimumVersion": "3.10.188.226" },
+  "Nodejs": { "Version": "20" },
+  "Actions": [
+    {
+      "Name": "Dispatch Agent",
+      "UUID": "com.cap.streamdock.dispatch",
+      "Icon": "icons/idle",
+      "Tooltip": "Dispatch a CAP agent against the active project.",
+      "PropertyInspectorPath": "property-inspector/dispatch.html",
+      "SupportedInMultiActions": false,
+      "States": [
+        { "Image": "icons/idle" },
+        { "Image": "icons/running" }
+      ]
+    },
+    {
+      "Name": "Project Picker",
+      "UUID": "com.cap.streamdock.picker",
+      "Icon": "icons/category",
+      "Tooltip": "Select the active CAP project.",
+      "PropertyInspectorPath": "property-inspector/picker.html",
+      "SupportedInMultiActions": false,
+      "Controllers": ["Encoder"],
+      "Encoder": { "TriggerDescription": { "Rotate": "Switch project", "Push": "Select project" } },
+      "States": [{ "Image": "icons/category" }]
+    }
+  ]
+}

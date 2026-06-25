@@ -141,6 +141,116 @@
           "description": "GitHub backend: run `gh pr close` on a high-confidence-obsolete PR (reversible). When false, only label/flag it."
         }
       }
+    },
+    "pipelineEvaluation": {
+      "type": "object",
+      "description": "Configuration for the macro self-improvement loop (pipeline-evaluator + agent-architect). Absent or enabled=false disables the feature; existing installs are unaffected.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Master switch. When false (or the whole object is absent), the orchestrator never dispatches pipeline-evaluator."
+        },
+        "cadence": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "description": "Number of completed runs since the last evaluation cursor before pipeline-evaluator is dispatched."
+        },
+        "minNewLessons": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 0,
+          "description": "Number of new/updated lessons in config.lessonsDir since the last cursor that also triggers a dispatch (OR condition with cadence and minImproverMerges)."
+        },
+        "minImproverMerges": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "description": "Number of merged chore: improvement PRs (agent-improver) since the last cursor that also triggers a dispatch."
+        }
+      }
+    },
+    "detectors": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-rule detector fleet (detectors.registry.json) + diff-gate tuning. Absent ⇒ defaults apply.",
+      "properties": {
+        "registryPath": {
+          "type": "string",
+          "default": "detectors.registry.json",
+          "description": "Path to the detector registry (single source of truth for the per-rule detector agents)."
+        },
+        "fullSweepEveryNCycles": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 1,
+          "description": "Every N cycles the orchestrator ignores the changed-files cursor and runs all sweep/both detectors across src/, backstopping cursor gaps."
+        },
+        "diffGate": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The needs-detector-gate stage that runs matched diff-mode detectors on a PR's changed lines.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "When false, code-reviewer advances straight past needs-detector-gate with no detector panel."
+            }
+          }
+        }
+      }
+    },
+    "maxAutoFixDiffLines": {
+      "type": "integer",
+      "default": 150,
+      "minimum": 1,
+      "description": "Soft ceiling on changed lines for an auto-fix PR. The worker splits or flags `needs-split` rather than open a larger PR, keeping each PR tiny and revertible."
+    },
+    "merge": {
+      "type": "object",
+      "description": "Tuning for the merge-agent, which auto-merges ONLY PRs explicitly tagged agent-mergeable. Absent ⇒ feature off; existing installs are unaffected and continue to route every PR to the human.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Master switch. When false (or the whole object is absent), the orchestrator never dispatches merge-agent and every ready PR waits for the human."
+        },
+        "label": {
+          "type": "string",
+          "default": "agent-mergeable",
+          "description": "The opt-in label (created under labelNamespace, e.g. `pipeline:agent-mergeable`) a human applies to a PR to authorize agent-merge. No label ⇒ never agent-merged, no exceptions."
+        },
+        "maxDiffLines": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 1,
+          "description": "Hard ceiling on changed lines (additions + deletions). A PR larger than this is too big to merge unsupervised — the agent removes the opt-in label and hands back to the human."
+        },
+        "maxFiles": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1,
+          "description": "Hard ceiling on changed files. Keeps an agent-merge scoped to a change small enough that it can't be confused."
+        },
+        "maxPerHour": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "description": "Throughput cap: the merge-agent lands at most this many PRs in any trailing 60 minutes. At the cap it defers (leaves the PR labeled) rather than merging — a blast-radius limiter even if everything else passes."
+        },
+        "maxPerDay": {
+          "type": "integer",
+          "default": 6,
+          "minimum": 1,
+          "description": "Secondary ceiling: at most this many agent-merges in any trailing 24 hours."
+        },
+        "requireConventionalTitle": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require the PR title to be a conventional commit (feat/fix/perf/chore/...), so the squash-merge's release semantics are unambiguous."
+        }
+      }
     }
   }
 }

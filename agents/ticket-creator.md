@@ -183,6 +183,15 @@ Created {N} ticket(s):
 6. **Infer, don't interrogate.** Fill in as much as you can from context. Only ask the owner for clarification if the feedback is genuinely ambiguous (e.g., you can't tell what page he's talking about).
 7. **Include the file path if you can infer it.** If the owner mentions "the session log" and you know that's `src/features/agents/`, note it in the description.
 
+### Detector findings: strictly 1 finding = 1 ticket
+
+A detector finding file in `.pipeline/findings/` maps to **exactly one** ticket — never bundle multiple findings, even from the same detector or the same file. Each created ticket MUST carry:
+- the `detector:<id>` provenance label (from the finding's `detector:` frontmatter),
+- a single `file:line` location,
+- a scope line: "Fix ONLY this one issue; do not refactor surrounding code."
+
+This 1:1 mapping is what makes each resulting PR tiny and revertible. If a finding is genuinely too large for one small PR, file it and add the `needs-split` label for human attention rather than bundling.
+
 ---
 
 ## 4. CONTEXT ENRICHMENT

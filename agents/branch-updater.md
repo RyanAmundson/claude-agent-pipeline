@@ -38,14 +38,24 @@ Categorize each branch:
 |---|---|---|---|
 | Any early stage | Up-to-date | Skip | No |
 | Any early stage | Behind, clean | Skip (will update later) | No |
-| Any early stage | Behind, conflicts | Label `pipeline:needs-feedback`, comment with conflicting files | No |
+| Any early stage | Behind, conflicts | Label `pipeline:needs-conflict-resolution`, comment with conflicting files | No |
 | `pipeline:ready-for-human` | Up-to-date | Skip | No |
 | `pipeline:ready-for-human` | Behind, clean | Merge main into branch, push | Yes (once) |
-| `pipeline:ready-for-human` | Behind, conflicts | Label `pipeline:needs-feedback`, feedback-responder resolves, then re-check | No (until resolved) |
+| `pipeline:ready-for-human` | Behind, conflicts | **Remove `pipeline:ready-for-human`** and add `pipeline:needs-conflict-resolution` — a conflicted PR is not mergeable, so it must leave the human-review queue. Conflict-resolver resolves, then re-check | No (until resolved) |
 
 ### Conflict Resolution Handoff
 
-When conflicts are detected, post a comment:
+When conflicts are detected, swap the labels and post a comment. **If the PR was at `pipeline:ready-for-human`, remove that label** — a PR that conflicts with main cannot be merged, so it must not sit in the human-review queue while conflicts are outstanding:
+
+```bash
+# Only for a PR that was at pipeline:ready-for-human:
+gh pr edit <number> --remove-label "pipeline:ready-for-human" \
+  --add-label "pipeline:needs-conflict-resolution,agent:branch-updater"
+
+# For an early-stage PR, keep its underlying state label (it's still accurate) and just add:
+gh pr edit <number> --add-label "pipeline:needs-conflict-resolution,agent:branch-updater"
+```
+
 ```
 [agent:branch-updater] This branch has merge conflicts with main.
 
@@ -53,10 +63,12 @@ Conflicting files:
 - src/features/agents/[components]/AgentCard/AgentCard.tsx
 - src/pages-content/protected/policies/page.tsx
 
-Labeling `pipeline:needs-feedback` for the feedback-responder to resolve.
+This PR was at pipeline:ready-for-human; a conflicted branch is not mergeable, so I'm
+removing pipeline:ready-for-human and labeling pipeline:needs-conflict-resolution for the
+conflict-resolver. It returns to ready-for-human once the merge is clean.
 ```
 
-The feedback-responder resolves the conflicts and re-labels to `pipeline:needs-test-review` (not back to ready-for-human) because conflict resolution changes code. The PR then flows through tester → code-reviewer → ready-for-human again before the branch-updater does the final merge+push.
+The **conflict-resolver** (not the feedback-responder — that agent handles human comments, not git merges) checks out the branch, merges main, and resolves the conflicts with a tiered strategy. It then re-routes by overlap tier: Tier A/B return the PR to `pipeline:ready-for-human` (CI confirms), Tier C downgrades to `pipeline:needs-test-review` so the PR flows through tester → code-reviewer before the branch-updater does any final merge+push. Genuinely ambiguous conflicts are escalated back to `pipeline:needs-feedback` for the human. Detection is your job; resolution is the conflict-resolver's.
 
 ### Push Rules
 

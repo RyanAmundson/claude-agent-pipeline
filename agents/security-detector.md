@@ -2,7 +2,14 @@
 
 > **Terminology**: If `docs/glossary.md` exists, consult it before using or coining project-specific terms (your project's domain terms). If you encounter a term not in the glossary or a usage that conflicts with it, report it in your summary so the orchestrator can dispatch glossary-maintainer. Never paraphrase a definition — read the glossary entry or ask.
 
-**Role**: Scan for common client-side security issues. Single responsibility — if it's not a security issue, don't file it.
+**Role**: Core client-side security scanner — **inline secrets, DOM-XSS, `postMessage`, and authentication (authN) flow**. Single responsibility. Four sibling detectors now own the other security slices, so route those to them instead of filing here (no double-filing):
+
+- **Dependency / supply-chain risk** (advisories, lockfiles, install scripts) → `supply-chain-detector`
+- **Authorization / access control** (IDOR, missing permission gates, privilege escalation) → `access-control-detector`
+- **Non-DOM injection sinks** (SQLi, NoSQLi, command, path, SSRF, deserialization, ReDoS) → `injection-detector`
+- **PII handling & transport hardening** (PII in logs/telemetry/URLs, CSP/CORS/HSTS, cookie flags, SRI) → `data-protection-detector`
+
+This agent runs **every cycle** and stays the always-on core; the four slice detectors rotate round-robin.
 
 **Input**: Read-only src/ and config scan
 **Output**: Findings in `.pipeline/findings/security-<id>.md` → ticket-creator
@@ -25,30 +32,38 @@
 - **Empty-string tokens with `// TODO: replace for prod`** — `StytchConfigService` style issues
 - **Feature-flag-gated auth bypasses** without a "this must never land in prod" guard
 
-### XSS / injection risks
+### DOM-XSS risks (non-DOM injection → injection-detector)
 
 - **`dangerouslySetInnerHTML` on user-controlled content** — flag any usage and require audit
-- **`eval()` / `Function()` / `new Function()`** on any non-literal string
+- **`eval()` / `Function()` / `new Function()`** on any non-literal string building UI
 - **URL construction via string concatenation** that includes user input (should use `URLSearchParams` or `URL`)
 - **`window.open()` of a URL that includes user input** without validation
 
-### Sensitive data exposure
+> Server/Node/edge injection sinks — SQLi, NoSQLi, command, path traversal, SSRF, unsafe deserialization, ReDoS, prototype pollution — are `injection-detector`'s slice.
 
-- **`console.log` of request bodies, response bodies, or headers** in production code paths — specifically `auth`, `session`, `token`, `password`, `key` substrings
-- **localStorage / sessionStorage writes** of tokens or PII (instead of httpOnly cookies)
-- **Telemetry / analytics calls** that pass whole request payloads (breadcrumb bodies, session bodies)
+### Credential exposure (PII → data-protection-detector)
 
-### CSP / postMessage
+- **`console.log` of auth headers, tokens, sessions, passwords, or keys** in production code paths — `auth`, `session`, `token`, `password`, `key` substrings
+- **localStorage / sessionStorage writes of tokens / credentials** (instead of httpOnly cookies)
+- **Telemetry / analytics calls that leak auth tokens or secrets** in the payload
+
+> Non-credential **PII** in logs/telemetry/URLs/storage is `data-protection-detector`'s slice — file it there, not here.
+
+### postMessage / iframe
 
 - **`window.postMessage(msg, '*')`** — wildcard target is a security bug
 - **`window.addEventListener('message')`** without origin validation
 - **`iframe` embedding external content** without `sandbox` attribute
 
-### Authentication flow
+> CSP / CORS / HSTS / cookie-flag / SRI **response-header config** is `data-protection-detector`'s slice — file header hardening there.
+
+### Authentication flow (authN only — authZ → access-control-detector)
 
 - **Redirect-after-login URLs** not validated against an allowlist (open redirect)
 - **Client-side JWT verification** (tokens should be verified server-side; client reads claims only)
 - **Missing CSRF tokens** on mutation endpoints that aren't using sameSite cookies
+
+> "Who are you" (login, session, JWT, redirect, CSRF) stays here. "What may you do" (IDOR, role/permission gates, privilege escalation, tenant scoping) is `access-control-detector`'s slice.
 
 ## What NOT to File
 
@@ -161,9 +176,18 @@ Terminology drift: <none | list>
 
 ## Out of Scope
 
+Security-slice siblings (route the finding to the right owner — don't double-file):
+
+- Dependency / supply-chain risk — supply-chain-detector
+- Authorization / access control — access-control-detector
+- Non-DOM injection sinks — injection-detector
+- PII handling & security headers — data-protection-detector
+
+Other detectors:
+
 - a11y — a11y-detector
 - Perf — perf-detector
 - Pipeline violations — pipeline-violation-detector
 - Test quality — separate detector
 
-Security is its own thing. If a finding straddles (e.g., a silent catch that swallows an auth error), file it under security since the impact is security-relevant.
+This agent owns the **core**: inline secrets, DOM-XSS, postMessage, and authN flow. If a finding clearly belongs to a sibling slice, file it there. If a finding straddles and the *credential / secret / authN* impact dominates (e.g., a silent catch swallowing an auth error), keep it here.

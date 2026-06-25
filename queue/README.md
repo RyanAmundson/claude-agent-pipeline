@@ -224,3 +224,51 @@ the conditional routing via `list`. See
 | Advance a molecule | `jq` + atomic rename | Per-ticket single-writer in practice (one active step) |
 
 This works on a single filesystem. It does NOT work across hosts (NFS atomicity is unreliable). If you need multi-host, switch to the Linear backend.
+
+## Feature epics (`.pipeline/epics/`)
+
+The feature pipeline stores **epics** with the exact same layout as tickets —
+`<id>.json` files in state subdirectories — but under `.pipeline/epics/` and
+using the `feature:*` state set (`needs-spec`, `needs-design`,
+`needs-decomposition`, `building`, `needs-integration`, `needs-acceptance`,
+`ready-for-human`, `blocked`, `needs-feedback`, `done`). Because the layout is
+identical, the same helpers operate on epics by passing `--queue-dir`:
+
+```bash
+queue/queue-claim.sh EPIC-001 needs-spec needs-design --queue-dir .pipeline/epics
+queue/queue-update.sh needs-design EPIC-001 '.design = "..."' --queue-dir .pipeline/epics
+```
+
+Epic file shape:
+
+```json
+{
+  "id": "EPIC-001",
+  "title": "Dark mode",
+  "intent": "rough one-liner from the human",
+  "spec": "...",
+  "design": "...",
+  "acceptance": ["criterion 1", "criterion 2"],
+  "integration_branch": "feature/EPIC-001",
+  "children": ["TKT-001-1", "TKT-001-2"],
+  "pr_url": null,
+  "created_at": "2026-06-17T10:00:00Z",
+  "updated_at": "2026-06-17T10:00:00Z"
+}
+```
+
+### Child ticket fields
+
+A feature's child tickets are ordinary tickets in `.pipeline/queue/` with two
+optional fields and a non-default `base`:
+
+- `epic` — the parent epic id (e.g. `"EPIC-001"`).
+- `depends_on` — array of sibling child ids that must merge into the integration
+  branch before this child may start.
+- `base` — set to the epic's `integration_branch` (e.g. `"feature/EPIC-001"`)
+  instead of `"main"`.
+
+Tickets with no `epic` field behave exactly as today. Dependency gating is owned
+by the orchestrator (see `agents/FEATURE-PIPELINE.md`): dependency-free children
+start in `needs-work`; dependency-blocked children are parked in `needs-info` and
+promoted to `needs-work` once their `depends_on` siblings reach `done`.

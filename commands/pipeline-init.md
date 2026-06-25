@@ -79,8 +79,13 @@ gh label create "$labelNamespace:needs-feature-validation" --color "FBCA04" --de
 gh label create "$labelNamespace:needs-feedback"      --color "D93F0B" --description "Review feedback to address"
 gh label create "$labelNamespace:ready-for-human"     --color "0E8A16" --description "All automated checks pass"
 
+# Opt-in label for the merge-agent. A HUMAN applies this to a specific ready-for-human
+# PR to authorize agent-merge; the merge-agent will not merge any PR that lacks it.
+# (Only created/used when config.merge.enabled is true; harmless otherwise.)
+gh label create "$labelNamespace:agent-mergeable"     --color "1D76DB" --description "Human-authorized for the merge-agent to land (small, fully-verified)"
+
 # Agent provenance labels
-for agent in scanner ticket-creator ticket-reviewer worker tester code-reviewer regression-tester feature-validator feedback-responder flex-worker orchestrator branch-updater cleanup ci-triage a11y-detector perf-detector security-detector data-fidelity-reviewer glossary-maintainer e2e-test-runner e2e-test-quality; do
+for agent in scanner ticket-creator ticket-reviewer worker tester code-reviewer regression-tester feature-validator feedback-responder flex-worker orchestrator branch-updater cleanup ci-triage a11y-detector perf-detector security-detector supply-chain-detector access-control-detector injection-detector data-protection-detector data-fidelity-reviewer glossary-maintainer e2e-test-runner e2e-test-quality simplify merge-agent; do
   gh label create "$agentLabelNamespace:$agent" --color "C5DEF5" --description "Provenance: $agent"
 done
 
