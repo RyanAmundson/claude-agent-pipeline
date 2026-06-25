@@ -27,6 +27,7 @@ pipeline:needs-feature-validation ?    → dispatch feature-validator
 pipeline:needs-feedback        ?    → dispatch feedback-responder
 pipeline:needs-conflict-resolution ? → dispatch conflict-resolver
 pipeline:ready-for-human       ?    → (the owner's queue — no dispatch)
+  └ + pipeline:agent-mergeable  ?    → dispatch merge-agent (only when config.merge.enabled)
 blocked-by:*                   ?    → (waiting — no dispatch)
 ```
 
@@ -80,6 +81,7 @@ Dispatch mapping:
 | `pipeline:needs-conflict-resolution` | conflict-resolver | `.agents/conflict-resolver.md` |
 | Staleness-gated `needs-work` ticket or `ready-for-human` item (only when `relevance.enabled`) | relevance-checker | `.agents/relevance-checker.md` |
 | `pipeline:ready-for-human` (behind main) | branch-updater | `.agents/branch-updater.md` |
+| `pipeline:ready-for-human` + `pipeline:agent-mergeable` (only when `config.merge.enabled`) | merge-agent | `.agents/merge-agent.md` |
 | PR touches stats/dashboard/aggregation | data-validator | `.agents/data-validator.md` |
 | Every 2 hours | data-validator (full sweep) | `.agents/data-validator.md` |
 | Agent report mentions undefined term, or PR introduces new domain terminology, or ticket uses term that conflicts with glossary | glossary-maintainer | `.agents/glossary-maintainer.md` |
@@ -173,7 +175,7 @@ This appends the cycle to `.pipeline/runs/cycles.jsonl`, which feeds `agent-pipe
 ## What NOT to Do
 
 - Do NOT create new cron jobs — dispatched agents are one-shot
-- Do NOT dispatch for `pipeline:ready-for-human` — that's the owner's queue
+- Do NOT dispatch for `pipeline:ready-for-human` — that's the owner's queue. **One exception**: a ready-for-human PR that ALSO carries `pipeline:agent-mergeable` AND `config.merge.enabled` is true → dispatch merge-agent (it re-verifies every gate and is throughput-capped; it merges or hands back). Branch-updater (behind-main) still applies as before.
 - Do NOT dispatch for `blocked-by` PRs — they're waiting intentionally
 - Do NOT exceed 5 agents per cycle
 - Do NOT dispatch for stages already being worked (check for recent `agent:*` comments < 15 min old to avoid double-dispatching)
