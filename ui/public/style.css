@@ -244,6 +244,9 @@ body:not([data-view="log"]) .log-only { display: none; }
    agent at that stage, then the line lights green for the token's travel. */
 .pl-edge.kind-dispatch        { stroke: var(--ok); stroke-dasharray: 2 5; opacity: 0; }
 .pl-edge.kind-dispatch.active { opacity: 0.4; transition: opacity 0.15s; }
+/* agents-band feeds: very faint ambient links from an off-spine agent chip up to
+   the stage it acts on — context, not focus. */
+.pl-edge.kind-bandfeed { stroke: var(--dim); stroke-dasharray: 1 4; opacity: 0.13; fill: none; }
 .pl-edge.flash        { stroke: var(--text); opacity: 1; transition: stroke 0.1s, opacity 0.1s; }
 
 /* nodes */
@@ -256,6 +259,11 @@ body:not([data-view="log"]) .log-only { display: none; }
 .pl-node.kind-entry  .pl-node-box { stroke: var(--dim); stroke-dasharray: 3 3; }
 .pl-node.kind-feeder .pl-node-box { fill: transparent; stroke: var(--dim); stroke-dasharray: 2 3; opacity: 0.7; }
 .pl-node.kind-meta   .pl-node-box { fill: #1a1f2b; stroke: var(--accent); }
+/* agents-band chips: compact, dimmer than spine nodes (they're the supporting
+   fleet, not the main flow). Smaller label fits the narrower box. */
+.pl-node.kind-agent  .pl-node-box   { fill: #141925; stroke: var(--line); opacity: 0.92; }
+.pl-node.kind-agent  .pl-node-label { font-size: 9px; font-weight: 500; fill: var(--dim); }
+.pl-band-caption { fill: var(--dim); font-size: 9px; font-weight: 600; letter-spacing: 0.04em; opacity: 0.7; }
 .pl-node-label { fill: var(--text); font-size: 13px; font-weight: 600; text-anchor: middle; }
 .pl-node-agent { fill: var(--dim);  font-size: 10px; text-anchor: middle; }
 .pl-node-count {

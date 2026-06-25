@@ -62,6 +62,54 @@ export function buildStaticGraph(svg, { nodes, edges, counts = {} }) {
   return { nodeEls, edgeEls };
 }
 
+/**
+ * Append the agents band: compact chips for off-spine agents (detectors,
+ * reviewers, maintainers) plus a faint feed edge from each chip up to the spine
+ * stage it acts on. `spineNodes` supplies the coordinates of those stage nodes so
+ * the cross-graph feed paths can be drawn. Optional `rowLabels` ({ rowKey: text })
+ * with `rowY` ({ rowKey: y }) draws a caption at the left margin of each row.
+ * @param {SVGElement} svg
+ * @param {{chips:object, feeds:object[], spineNodes:object, rowLabels?:object, rowY?:object}} opts
+ */
+export function buildAgentsBand(svg, { chips, feeds, spineNodes, rowLabels = {}, rowY = {} }) {
+  const coords = { ...spineNodes, ...chips };
+  const edgeLayer = el('g', { class: 'pl-band-edges' });
+  const nodeLayer = el('g', { class: 'pl-band-nodes' });
+
+  for (const f of feeds) {
+    if (!coords[f.from] || !coords[f.to]) continue;
+    edgeLayer.append(el('path', {
+      class: 'pl-edge kind-bandfeed',
+      d: pathFor({ from: f.from, to: f.to, bend: f.bend || 0 }, coords),
+      'data-edge': f.id,
+    }));
+  }
+
+  for (const [row, text] of Object.entries(rowLabels)) {
+    if (rowY[row] == null) continue;
+    const cap = el('text', { class: 'pl-band-caption', x: 16, y: rowY[row] + 3 });
+    cap.textContent = text;
+    nodeLayer.append(cap);
+  }
+
+  for (const [id, n] of Object.entries(chips)) {
+    const w = n.w || 96;
+    const h = 26;
+    const g = el('g', { class: 'pl-node kind-agent', 'data-node': id, transform: `translate(${n.x},${n.y})` });
+    const title = el('title');
+    title.textContent = n.agent;
+    g.append(title);
+    g.append(el('rect', { class: 'pl-node-box', x: -w / 2, y: -h / 2, width: w, height: h, rx: 5 }));
+    const label = el('text', { class: 'pl-node-label', y: 3 });
+    label.textContent = n.label;
+    g.append(label);
+    nodeLayer.append(g);
+  }
+
+  svg.append(edgeLayer, nodeLayer);
+  return { nodeLayer, edgeLayer };
+}
+
 /** Update count badges + the `empty` class for state-bearing nodes. */
 export function renderStaticCounts(nodeEls, nodes, counts = {}) {
   for (const [id, n] of Object.entries(nodes)) {

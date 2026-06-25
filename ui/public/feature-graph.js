@@ -2,9 +2,8 @@
 // ordinary tickets in feature:* states (see api FEATURE_STATES); this renders
 // their flow with the same machinery as the bug-fix spine. No DOM.
 //
-// h is 720 (not 560) so the shared self-improvement band — whose nodes live at
-// y ≈ 600-690 (metaloop-graph BAND_ORIGIN_Y) — fits within the same viewBox
-// when rendered beneath the feature flow on this tab.
+// Shares the pipeline tab's 1260×720 viewBox so the feature flow renders at the
+// same scale as the bug-fix spine.
 export const FEATURE_VIEW = { w: 1260, h: 720 };
 
 // Lifecycle on the top row; side states (blocked / needs-feedback) below.

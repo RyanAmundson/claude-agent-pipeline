@@ -10,8 +10,8 @@ import {
   backPressureByNode, provisioningEvents, dispatchEdgeId,
 } from './pipeline-graph.js';
 import { colorForAgent } from './colors.js';
-import { buildStaticGraph } from './graph-render.js';
-import { META_NODES, META_EDGES } from './metaloop-graph.js';
+import { buildAgentsBand } from './graph-render.js';
+import { bandLayout, BAND_ROW_Y, BAND_ROW_LABELS } from './agents-band-graph.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -112,18 +112,14 @@ function buildGraph() {
 
   svg.append(edgeLayer, tokenLayer, nodeLayer);
 
-  // Self-improvement band: appended into the same SVG beneath the spine.
-  buildStaticGraph(svg, { nodes: META_NODES, edges: META_EDGES });
-  // Connector spanning both graphs: findings flow up into the spine's triage.
-  // Use a dedicated layer so it can't collide with the spine's own edge layer.
-  const combined = { ...NODES, ...META_NODES };
-  const connectorLayer = el('g', { class: 'pl-connectors' });
-  connectorLayer.append(el('path', {
-    class: 'pl-edge kind-feed',
-    d: pathFor({ from: 'findings', to: 'needs-triage', bend: 80 }, combined),
-    'data-edge': 'meta:into-triage',
-  }));
-  svg.append(connectorLayer);
+  // Agents band: compact chips for the off-spine fleet (detectors, reviewers,
+  // maintainers) the orchestrator dispatches, each with a faint feed up to the
+  // spine stage it acts on. Appended into the same SVG beneath the spine.
+  const { chips, feeds } = bandLayout(VIEW, BAND_ROW_Y);
+  buildAgentsBand(svg, {
+    chips, feeds, spineNodes: NODES,
+    rowLabels: BAND_ROW_LABELS, rowY: BAND_ROW_Y,
+  });
   return true;
 }
 

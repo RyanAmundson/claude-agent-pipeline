@@ -310,6 +310,6 @@ test('conflict-resolver has a home node and a dispatch edge', () => {
   assert.equal(d.to, 'needs-conflict-resolution');
 });
 
-test('VIEW grew tall enough for the self-improvement band', () => {
+test('VIEW is tall enough for the spine plus the agents band', () => {
   assert.ok(VIEW.h >= 720, `VIEW.h is ${VIEW.h}, expected >= 720`);
 });

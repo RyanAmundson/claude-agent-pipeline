@@ -1,13 +1,12 @@
-// Features tab controller. Renders the feature:* flow + the shared
-// self-improvement band into #feature-graph, fed by the same /api/v1 snapshot
-// and SSE stream as the pipeline tab. Features are ordinary tickets, so counts
+// Features tab controller. Renders the feature:* flow into #feature-graph, fed
+// by the same /api/v1 snapshot and SSE stream as the pipeline tab. Features are
+// ordinary tickets, so counts
 // come straight from snapshot.tickets.byState. Empty state until any exist.
 
 import {
   FEATURE_NODES, FEATURE_EDGES, FEATURE_VIEW,
   featureCountsOf, childrenByEpic, isEmptyCounts,
 } from './feature-graph.js';
-import { META_NODES, META_EDGES } from './metaloop-graph.js';
 import { buildStaticGraph, renderStaticCounts } from './graph-render.js';
 
 let built = false;
@@ -26,8 +25,6 @@ function build() {
   svg.setAttribute('viewBox', `0 0 ${FEATURE_VIEW.w} ${FEATURE_VIEW.h}`);
   const flow = buildStaticGraph(svg, { nodes: FEATURE_NODES, edges: FEATURE_EDGES });
   featureNodeEls = flow.nodeEls;
-  // Shared self-improvement band beneath the feature flow.
-  buildStaticGraph(svg, { nodes: META_NODES, edges: META_EDGES });
   // Building drill-in: clicking the building node toggles its child-ticket panel.
   const building = featureNodeEls.get('feature:building');
   if (building) {
