@@ -27,6 +27,7 @@ pipeline:needs-feature-validation ?    → dispatch feature-validator
 pipeline:needs-feedback        ?    → dispatch feedback-responder
 pipeline:needs-conflict-resolution ? → dispatch conflict-resolver
 pipeline:ready-for-human       ?    → (the owner's queue — no dispatch)
+  └ + pipeline:agent-mergeable  ?    → dispatch merge-agent (only when config.merge.enabled)
 blocked-by:*                   ?    → (waiting — no dispatch)
 ```
 
@@ -35,6 +36,7 @@ Sources:
 - Linear: query for issues with `pipeline:*` labels for ticket pipeline states
 - Linear backlog: query for Backlog/Todo issues assigned to the owner — these are ready for workers even without `pipeline:needs-work` labels
 - Linear unassigned: query for Backlog/Todo issues with NO assignee on the configured team — many UI tickets land unassigned and are invisible to the pipeline. Workers should self-assign before starting. Filter via `excludeProjects` and `excludeLabels` in `.pipeline/config.json`
+- Feature epics: scan `.pipeline/epics/<state>/` (filesystem) or `feature:*` labels (GitHub/Linear) — every cycle, alongside tickets
 
 **The pipeline is NOT idle if there are backlog tickets.** Always dispatch at least one worker when there are actionable backlog tickets (assigned to the owner OR unassigned UI tickets), regardless of how many PRs are in the review queue. New work and review work are independent streams — don't gate one on the other. Workers self-assign unassigned tickets via Linear before starting work.
 
@@ -79,10 +81,13 @@ Dispatch mapping:
 | `pipeline:needs-conflict-resolution` | conflict-resolver | `.agents/conflict-resolver.md` |
 | Staleness-gated `needs-work` ticket or `ready-for-human` item (only when `relevance.enabled`) | relevance-checker | `.agents/relevance-checker.md` |
 | `pipeline:ready-for-human` (behind main) | branch-updater | `.agents/branch-updater.md` |
+| `pipeline:ready-for-human` + `pipeline:agent-mergeable` (only when `config.merge.enabled`) | merge-agent | `.agents/merge-agent.md` |
 | PR touches stats/dashboard/aggregation | data-validator | `.agents/data-validator.md` |
 | Every 2 hours | data-validator (full sweep) | `.agents/data-validator.md` |
 | Agent report mentions undefined term, or PR introduces new domain terminology, or ticket uses term that conflicts with glossary | glossary-maintainer | `.agents/glossary-maintainer.md` |
 | Every 7 days | glossary-maintainer (periodic audit) | `.agents/glossary-maintainer.md` |
+| `pipelineEvaluation.enabled` and any threshold tripped since the `.pipeline/improvement/cursor.json` baseline (completed runs ≥ `cadence`, OR new lessons ≥ `minNewLessons`, OR merged improvement PRs ≥ `minImproverMerges`) | pipeline-evaluator | `.agents/pipeline-evaluator.md` |
+| `capability-gap` findings/tickets exist (requires `pipelineEvaluation.enabled`) | agent-architect | `.agents/agent-architect.md` |
 | Any open ${GH_USER} PR has a failing CI check (via `gh pr checks`) | ci-triage | `.agents/ci-triage.md` |
 | Round-robin detector slot (one per cycle) | a11y-detector → perf-detector → pipeline-violation-detector → mock-contract-detector → density-system-detector → justification-detector → supply-chain-detector → access-control-detector → injection-detector → data-protection-detector → (back to a11y) | `.agents/<detector>.md` |
 | PR enters `pipeline:needs-code-review` | justification-detector (PR-mode, alongside code-reviewer) | `.agents/justification-detector.md` |
@@ -100,6 +105,8 @@ Dispatch mapping:
 | PR merged touching logging/telemetry, cookie/session config, or response-header/CSP/CORS config, or adding an external `<script>`/`<link>` | data-protection-detector | — |
 
 For stages with multiple items, dispatch multiple agents of the same role — each works a different item.
+
+**Finding-type routing (`domain:pipeline-improvement`).** These findings route by type, not all to one agent: `improvement-finding` (from transcript-reviewer) and `improvement-regression` (from pipeline-evaluator) → `agent-improver`; `capability-gap` (from pipeline-evaluator) → `agent-architect`; `strategy-finding` (from pipeline-evaluator) stays in `pipeline:needs-triage` for the human (no auto-dispatch).
 
 - **`pipeline:needs-detector-gate`** (only when `config.detectors.diffGate.enabled`, default true): trigger `runner/detector-gate.js` for the PR. It fans out the diff-mode detectors whose glob+prefilter match the PR's changed files, persists `.pipeline/reviews/<pr>/detector-*.json`, and computes the severity gate: any `blocker`/`major` (or any `veto`) → re-label `pipeline:needs-feedback` (feedback-responder consumes it); otherwise advance to the next state (`pipeline:needs-regression-check`, or `pipeline:ready-for-human` if the regression/feature gates are disabled). When `diffGate.enabled` is false, `code-reviewer` advances straight past this state with no panel.
 
@@ -168,7 +175,7 @@ This appends the cycle to `.pipeline/runs/cycles.jsonl`, which feeds `agent-pipe
 ## What NOT to Do
 
 - Do NOT create new cron jobs — dispatched agents are one-shot
-- Do NOT dispatch for `pipeline:ready-for-human` — that's the owner's queue
+- Do NOT dispatch for `pipeline:ready-for-human` — that's the owner's queue. **One exception**: a ready-for-human PR that ALSO carries `pipeline:agent-mergeable` AND `config.merge.enabled` is true → dispatch merge-agent (it re-verifies every gate and is throughput-capped; it merges or hands back). Branch-updater (behind-main) still applies as before.
 - Do NOT dispatch for `blocked-by` PRs — they're waiting intentionally
 - Do NOT exceed 5 agents per cycle
 - Do NOT dispatch for stages already being worked (check for recent `agent:*` comments < 15 min old to avoid double-dispatching)
@@ -181,6 +188,38 @@ The feedback-responder is on-demand like other agents, but has an additional tri
 - A comment is "unresolved" if there is no `[agent:feedback-responder] Addressed` reply after it
 - If ANY unresolved the owner comment exists → dispatch feedback-responder immediately, even if the PR has no `pipeline:needs-feedback` label
 - the owner's comments are the highest priority dispatch — always dispatch feedback-responder before other roles
+
+## Feature pipeline (epics)
+
+Each cycle, after the ticket pipeline snapshot, also scan feature epics and run the building monitor. Feature epics are read from `.pipeline/epics/<state>/` (filesystem backend) or from `feature:*` labels on tracking issues (GitHub/Linear backend).
+
+### Dispatch feature agents
+
+When the corresponding epic queue is non-empty, dispatch the feature agent for that state (subject to the global 5-agent-per-cycle cap shared with ticket-pipeline agents):
+
+| State | Agent | Prompt source |
+|---|---|---|
+| `feature:needs-spec` | feature-spec-writer | `.agents/feature-spec-writer.md` |
+| `feature:needs-design` | feature-architect | `.agents/feature-architect.md` |
+| `feature:needs-decomposition` | feature-decomposer | `.agents/feature-decomposer.md` |
+| `feature:needs-integration` | feature-integrator | `.agents/feature-integrator.md` |
+| `feature:needs-acceptance` | feature-acceptance-validator | `.agents/feature-acceptance-validator.md` |
+
+### Building monitor (for `feature:building` epics)
+
+For each epic currently in the `building` state, run three monitoring duties each cycle (exact commands are in `agents/FEATURE-PIPELINE.md` §Dependency gating and §Child auto-merge):
+
+1. **Dependency gating** — for every child in `needs-info/`, check if all ids in its `depends_on` list are in `done`. If so, promote the child to `needs-work` so it starts flowing through the ticket pipeline.
+
+2. **Child auto-merge** — when a child ticket whose JSON carries an `epic` field reaches `ready-for-human`, merge it into the epic's `integration_branch` (no per-child human gate) and move the child to `done`. On a merge conflict, route the child to `needs-conflict-resolution` instead.
+
+3. **Advance when all children done** — when every id in the epic's `children` list is in `done`, advance the epic from `building` → `needs-integration`.
+
+### Feedback routing for `feature:needs-feedback`
+
+When a `feature:needs-feedback` epic exists (human left comments on the epic PR), dispatch `feedback-responder` to address the comments and route the epic back to the relevant stage per `agents/FEATURE-PIPELINE.md`. This follows the same "highest priority" rule as the ticket-pipeline feedback-responder — dispatch it before other feature agents in that cycle.
+
+See `agents/FEATURE-PIPELINE.md` for the full state machine and the exact merge/transition commands.
 
 ## Periodic Agents
 

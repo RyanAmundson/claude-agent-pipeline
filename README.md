@@ -220,17 +220,18 @@ Tickets live as JSON files under `.pipeline/queue/<state>/<id>.json`. State tran
 
 ## Agents
 
-40 agents across these stages (see [`manifest.json`](./manifest.json) for the canonical list and dep tags):
+43 agents across these stages (see [`manifest.json`](./manifest.json) for the canonical list and dep tags):
 
 | Stage | Agents |
 |-------|--------|
 | **Intake** | scanner, ticket-creator |
 | **Routing** | ticket-reviewer, relevance-checker, flex-worker, linear-issue-orchestrator |
-| **Implementation** | worker, declarative-refactor-specialist, folder-structure-enforcer, technical-docs-manager, branch-updater, agent-improver, dead-code-remover, code-simplifier |
+| **Implementation** | worker, declarative-refactor-specialist, folder-structure-enforcer, technical-docs-manager, branch-updater, conflict-resolver, agent-improver, agent-architect, dead-code-remover, code-simplifier |
 | **Quality** | tester, e2e-test-quality, e2e-test-runner, ci-triage, data-validator, regression-tester |
 | **Review** | code-reviewer, feedback-responder, cleanup, feature-validator |
+| **Merge** | merge-agent (opt-in: lands only PRs a human tagged `pipeline:agent-mergeable` — small, fully-verified, throughput-capped; off unless `config.merge.enabled`) |
 | **Detectors** (round-robin) | a11y, perf, security, pipeline-violation, mock-contract, density-system, justification, supply-chain, access-control, injection, data-protection |
-| **Improvement** | transcript-reviewer (reviews run/session transcripts → lessons + agent-def fixes via agent-improver) |
+| **Improvement** | transcript-reviewer (per-run: transcripts → lessons + improvement-findings via agent-improver); pipeline-evaluator (corpus-level, opt-in: effectiveness verification + capability-gap detection → improvement-regressions via agent-improver + capability-gaps via agent-architect; also scores feature-pipeline health — epic dwell / fan-out yield / conflict recurrence — when epics are in use) |
 | **Utilities** | glossary-maintainer, context-mapper, git-worktree-manager |
 | **Meta** | orchestrator |
 

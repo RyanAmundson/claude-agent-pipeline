@@ -114,6 +114,12 @@
         "github"
       ]
     },
+    "merge-agent": {
+      "stage": "merge",
+      "requires": [
+        "github"
+      ]
+    },
     "conflict-resolver": {
       "stage": "implementation",
       "requires": [
@@ -128,6 +134,16 @@
       "optional": [
         "linear"
       ]
+    },
+    "pipeline-evaluator": {
+      "stage": "improvement",
+      "requires": [],
+      "optional": ["github", "linear"]
+    },
+    "agent-architect": {
+      "stage": "implementation",
+      "requires": ["github"],
+      "optional": ["linear"]
     },
     "dead-code-remover": {
       "stage": "implementation",
@@ -215,6 +231,27 @@
       "requires": [
         "github"
       ]
+    },
+    "feature-spec-writer": {
+      "stage": "feature",
+      "requires": []
+    },
+    "feature-architect": {
+      "stage": "feature",
+      "requires": ["github"]
+    },
+    "feature-decomposer": {
+      "stage": "feature",
+      "requires": []
+    },
+    "feature-integrator": {
+      "stage": "feature",
+      "requires": ["github"]
+    },
+    "feature-acceptance-validator": {
+      "stage": "feature",
+      "requires": ["github"],
+      "optional": ["agent-browser", "playwright", "chrome-devtools"]
     },
     "a11y-detector": {
       "stage": "detector",
