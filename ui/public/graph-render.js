@@ -63,15 +63,14 @@ export function buildStaticGraph(svg, { nodes, edges, counts = {} }) {
 }
 
 /**
- * Append the agents band: compact chips for off-spine agents (detectors,
- * reviewers, maintainers) plus a faint feed edge from each chip up to the spine
- * stage it acts on. `spineNodes` supplies the coordinates of those stage nodes so
- * the cross-graph feed paths can be drawn. Optional `rowLabels` ({ rowKey: text })
- * with `rowY` ({ rowKey: y }) draws a caption at the left margin of each row.
+ * Append the agents band: compact chips for off-spine agents stacked in columns
+ * under the spine stage each one works at, plus one faint stem per column from
+ * the stage node down behind the stack. `spineNodes` supplies the stage-node
+ * coordinates so the cross-graph feed paths can be drawn.
  * @param {SVGElement} svg
- * @param {{chips:object, feeds:object[], spineNodes:object, rowLabels?:object, rowY?:object}} opts
+ * @param {{chips:object, feeds:object[], spineNodes:object}} opts
  */
-export function buildAgentsBand(svg, { chips, feeds, spineNodes, rowLabels = {}, rowY = {} }) {
+export function buildAgentsBand(svg, { chips, feeds, spineNodes }) {
   const coords = { ...spineNodes, ...chips };
   const edgeLayer = el('g', { class: 'pl-band-edges' });
   const nodeLayer = el('g', { class: 'pl-band-nodes' });
@@ -85,21 +84,14 @@ export function buildAgentsBand(svg, { chips, feeds, spineNodes, rowLabels = {},
     }));
   }
 
-  for (const [row, text] of Object.entries(rowLabels)) {
-    if (rowY[row] == null) continue;
-    const cap = el('text', { class: 'pl-band-caption', x: 16, y: rowY[row] + 3 });
-    cap.textContent = text;
-    nodeLayer.append(cap);
-  }
-
   for (const [id, n] of Object.entries(chips)) {
-    const w = n.w || 96;
-    const h = 26;
+    const w = n.w || 104;
+    const h = n.h || 16;
     const g = el('g', { class: 'pl-node kind-agent', 'data-node': id, transform: `translate(${n.x},${n.y})` });
     const title = el('title');
     title.textContent = n.agent;
     g.append(title);
-    g.append(el('rect', { class: 'pl-node-box', x: -w / 2, y: -h / 2, width: w, height: h, rx: 5 }));
+    g.append(el('rect', { class: 'pl-node-box', x: -w / 2, y: -h / 2, width: w, height: h, rx: 4 }));
     const label = el('text', { class: 'pl-node-label', y: 3 });
     label.textContent = n.label;
     g.append(label);

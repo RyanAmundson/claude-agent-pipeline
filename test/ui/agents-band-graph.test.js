@@ -1,20 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BAND_AGENTS, BAND_ROW_Y, BAND_ROW_LABELS, bandLayout,
+  BAND_AGENTS, BAND_TOP, CHIP_H, CHIP_W, bandLayout,
 } from '../../ui/public/agents-band-graph.js';
 import { NODES, VIEW, pathFor } from '../../ui/public/pipeline-graph.js';
 
-test('every band agent feeds a spine node that exists', () => {
+test('every band agent works at a spine stage that exists', () => {
   for (const a of BAND_AGENTS) {
-    assert.ok(NODES[a.feeds], `agent ${a.id} feeds unknown spine node ${a.feeds}`);
-  }
-});
-
-test('every band agent sits in a defined row with a caption', () => {
-  for (const a of BAND_AGENTS) {
-    assert.ok(BAND_ROW_Y[a.row] != null, `agent ${a.id} in unknown row ${a.row}`);
-    assert.ok(BAND_ROW_LABELS[a.row], `row ${a.row} has no caption`);
+    assert.ok(NODES[a.stage], `agent ${a.id} has unknown stage ${a.stage}`);
   }
 });
 
@@ -30,29 +23,51 @@ test('all eleven detectors are represented', () => {
   assert.equal(detectors.length, 11, `expected 11 detectors, got ${detectors.length}`);
 });
 
-test('the band sits below the spine and within the canvas', () => {
-  // Spine + its lower lanes end ~y432; the canvas is VIEW.h tall.
-  for (const [row, y] of Object.entries(BAND_ROW_Y)) {
-    assert.ok(y > 432, `row ${row} (${y}) must sit below the spine`);
-    assert.ok(y + 13 <= VIEW.h, `row ${row} (${y}) must fit within VIEW.h=${VIEW.h}`);
-  }
+test('the ticket-reviewer sits under review, not code-review', () => {
+  const tr = BAND_AGENTS.find(a => a.id === 'ticket-reviewer');
+  assert.ok(tr, 'ticket-reviewer missing from the band');
+  assert.equal(tr.stage, 'needs-review');
 });
 
-test('bandLayout positions a chip + a feed for every agent, within the canvas', () => {
-  const { chips, feeds } = bandLayout(VIEW, BAND_ROW_Y);
+test('the detector panel concentrates under code-review', () => {
+  const atCodeReview = BAND_AGENTS.filter(a => a.stage === 'needs-code-review');
+  // 10 detectors (security works at triage) + the two data reviewers.
+  assert.equal(atCodeReview.length, 12, `expected 12 agents at code-review, got ${atCodeReview.length}`);
+});
+
+test('bandLayout anchors each chip under its stage x, in a downward column', () => {
+  const { chips } = bandLayout(NODES);
   assert.equal(Object.keys(chips).length, BAND_AGENTS.length);
-  assert.equal(feeds.length, BAND_AGENTS.length);
+  // group by stage and assert shared x + monotonic, BAND_TOP-anchored y.
+  const byStage = new Map();
   for (const a of BAND_AGENTS) {
-    const c = chips[a.id];
-    assert.ok(c, `no chip for ${a.id}`);
-    assert.ok(c.x - c.w / 2 >= 0 && c.x + c.w / 2 <= VIEW.w, `chip ${a.id} overflows canvas width`);
+    if (!byStage.has(a.stage)) byStage.set(a.stage, []);
+    byStage.get(a.stage).push(a.id);
+  }
+  for (const [stage, ids] of byStage) {
+    ids.forEach((id, i) => {
+      assert.equal(chips[id].x, NODES[stage].x, `${id} not aligned under ${stage}`);
+      assert.equal(chips[id].y, BAND_TOP + i * 20, `${id} not stacked at row ${i}`);
+    });
   }
 });
 
-test('every feed renders to an SVG path against merged spine+chip coords', () => {
-  const { chips, feeds } = bandLayout(VIEW, BAND_ROW_Y);
+test('the tallest column fits within the canvas and clears the spine lower lane', () => {
+  const { chips } = bandLayout(NODES);
+  for (const c of Object.values(chips)) {
+    assert.ok(c.y - CHIP_H / 2 > 432, 'a chip overlaps the spine lower lane (~y432)');
+    assert.ok(c.y + CHIP_H / 2 <= VIEW.h, `a chip overflows VIEW.h=${VIEW.h}`);
+    assert.ok(c.x - CHIP_W / 2 >= 0 && c.x + CHIP_W / 2 <= VIEW.w, 'a chip overflows the canvas width');
+  }
+});
+
+test('one feed stem per column renders to an SVG path against merged coords', () => {
+  const { chips, feeds } = bandLayout(NODES);
+  const stages = new Set(BAND_AGENTS.map(a => a.stage));
+  assert.equal(feeds.length, stages.size, 'expected exactly one feed per stage column');
   const coords = { ...NODES, ...chips };
   for (const f of feeds) {
+    assert.ok(NODES[f.from], `feed ${f.id} from a non-stage node`);
     const d = pathFor({ from: f.from, to: f.to }, coords);
     assert.ok(typeof d === 'string' && d.startsWith('M'), `feed ${f.id} did not render`);
   }

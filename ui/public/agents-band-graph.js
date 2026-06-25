@@ -1,93 +1,100 @@
-// Pure topology for the agents band: the detector + specialist fleet the
-// orchestrator dispatches off the main spine, drawn as compact chips beneath the
-// pipeline. Each chip names an agent and feeds (a faint edge) the spine stage it
-// acts on. No DOM — importable in Node (unit tests) and the browser.
+// Pure topology for the agents band: the off-spine fleet the orchestrator
+// dispatches, arranged in COLUMNS beneath the spine stage each agent works at.
+// A column's height shows where work concentrates — code-review carries the
+// whole detector panel, while a lone chip under another stage shows an agent
+// that belongs there instead (e.g. the ticket-reviewer under review). No DOM —
+// importable in Node (unit tests) and the browser.
 //
-// This replaces the old self-improvement ("metaloop") band. The four
+// This replaced the old self-improvement ("metaloop") band; the four
 // self-improvement agents (transcript-reviewer, pipeline-evaluator,
 // agent-improver, agent-architect) are intentionally NOT drawn — that loop was
-// removed from the graph.
+// removed, not relocated.
 
-// The band sits below the spine (the spine and its lower lanes end ~y432).
-// Three compact rows, all within the VIEW.h = 720 canvas.
-export const BAND_ROW_Y = {
-  detectors: 545,
-  reviewers: 625,
-  maintainers: 695,
-};
+// The band sits below the spine's lower lane (which ends ~y432), within the
+// VIEW.h = 720 canvas. Columns stack downward from BAND_TOP.
+export const BAND_TOP = 460;
+export const CHIP_H = 16;       // chip box height
+export const ROW_STEP = 20;     // vertical centre-to-centre spacing in a column
+export const CHIP_W = 104;      // chip box width (< the 120px spine stage spacing)
 
-export const BAND_ROW_LABELS = {
-  detectors: 'detectors ⟳',
-  reviewers: 'reviewers',
-  maintainers: 'maintainers ⟳',
-};
-
-// Each entry: { id (agent slug), label (short, for the chip), row, feeds }.
-// `feeds` is the id of a spine node in pipeline-graph's NODES — the stage this
-// agent acts on. The controller draws that cross-graph edge using merged coords.
-// Order within a row sets left→right placement.
+// Each agent: { id (slug), label (short, for the chip), stage }. `stage` is the
+// id of the spine node (pipeline-graph NODES) the agent works at — it anchors the
+// column (x = that node's x) AND is the feed target. Order within a stage sets
+// top→bottom placement.
 export const BAND_AGENTS = [
-  // ── detectors: the diff-mode panel gating code-review, plus always-on security
-  { id: 'security-detector',           label: 'security',      row: 'detectors', feeds: 'needs-triage' },
-  { id: 'a11y-detector',               label: 'a11y',          row: 'detectors', feeds: 'needs-code-review' },
-  { id: 'perf-detector',               label: 'perf',          row: 'detectors', feeds: 'needs-code-review' },
-  { id: 'access-control-detector',     label: 'access-ctrl',   row: 'detectors', feeds: 'needs-code-review' },
-  { id: 'injection-detector',          label: 'injection',     row: 'detectors', feeds: 'needs-code-review' },
-  { id: 'data-protection-detector',    label: 'data-prot',     row: 'detectors', feeds: 'needs-code-review' },
-  { id: 'supply-chain-detector',       label: 'supply-chain',  row: 'detectors', feeds: 'needs-code-review' },
-  { id: 'justification-detector',      label: 'justify',       row: 'detectors', feeds: 'needs-code-review' },
-  { id: 'mock-contract-detector',      label: 'mock',          row: 'detectors', feeds: 'needs-code-review' },
-  { id: 'density-system-detector',     label: 'density',       row: 'detectors', feeds: 'needs-code-review' },
-  { id: 'pipeline-violation-detector', label: 'pipeline-viol', row: 'detectors', feeds: 'needs-code-review' },
+  // scanner — loop-driven refactor / cleanup sweeps off the merged main
+  { id: 'code-simplifier',                 label: 'simplifier',    stage: 'scanner' },
+  { id: 'declarative-refactor-specialist', label: 'declarative',   stage: 'scanner' },
+  { id: 'folder-structure-enforcer',       label: 'folder-struct', stage: 'scanner' },
 
-  // ── reviewers: deeper PR-stage reviews + CI/branch upkeep + terminology/mapping
-  { id: 'data-validator',              label: 'data-valid',    row: 'reviewers', feeds: 'needs-code-review' },
-  { id: 'data-fidelity-reviewer',      label: 'data-fidelity', row: 'reviewers', feeds: 'needs-code-review' },
-  { id: 'ci-triage',                   label: 'ci-triage',     row: 'reviewers', feeds: 'needs-feedback' },
-  { id: 'branch-updater',              label: 'branch-upd',    row: 'reviewers', feeds: 'ready-for-human' },
-  { id: 'glossary-maintainer',         label: 'glossary',      row: 'reviewers', feeds: 'needs-triage' },
-  { id: 'context-mapper',              label: 'context-map',   row: 'reviewers', feeds: 'needs-triage' },
-  { id: 'e2e-test-runner',             label: 'e2e-runner',    row: 'reviewers', feeds: 'needs-test-review' },
-  { id: 'e2e-test-quality',            label: 'e2e-quality',   row: 'reviewers', feeds: 'needs-test-review' },
+  // triage — always-on security sweep + terminology / reference mapping
+  { id: 'security-detector',    label: 'security',    stage: 'needs-triage' },
+  { id: 'glossary-maintainer',  label: 'glossary',    stage: 'needs-triage' },
+  { id: 'context-mapper',       label: 'context-map', stage: 'needs-triage' },
 
-  // ── maintainers: loop-driven refactor/cleanup + docs + load-balancing
-  { id: 'code-simplifier',                 label: 'simplifier',    row: 'maintainers', feeds: 'scanner' },
-  { id: 'declarative-refactor-specialist', label: 'declarative',   row: 'maintainers', feeds: 'scanner' },
-  { id: 'folder-structure-enforcer',       label: 'folder-struct', row: 'maintainers', feeds: 'scanner' },
-  { id: 'dead-code-remover',               label: 'dead-code',     row: 'maintainers', feeds: 'needs-work' },
-  { id: 'flex-worker',                     label: 'flex-worker',   row: 'maintainers', feeds: 'needs-work' },
-  { id: 'git-worktree-manager',            label: 'worktree',      row: 'maintainers', feeds: 'in-progress' },
-  { id: 'technical-docs-manager',          label: 'docs',          row: 'maintainers', feeds: 'done' },
+  // review — the ticket reviewer is a reviewer that works HERE, not at code-review
+  { id: 'ticket-reviewer',      label: 'ticket-rev',  stage: 'needs-review' },
+
+  // work — dead-code removal + load-balancing into the worker pool
+  { id: 'dead-code-remover',    label: 'dead-code',   stage: 'needs-work' },
+  { id: 'flex-worker',          label: 'flex-worker', stage: 'needs-work' },
+
+  // in-progress — worktree plumbing for the active worker
+  { id: 'git-worktree-manager', label: 'worktree',    stage: 'in-progress' },
+
+  // test — the e2e runners pair with the tester
+  { id: 'e2e-test-runner',      label: 'e2e-runner',  stage: 'needs-test-review' },
+  { id: 'e2e-test-quality',     label: 'e2e-quality', stage: 'needs-test-review' },
+
+  // code-review — the whole detector panel + data reviewers gate here
+  { id: 'a11y-detector',               label: 'a11y',          stage: 'needs-code-review' },
+  { id: 'perf-detector',               label: 'perf',          stage: 'needs-code-review' },
+  { id: 'access-control-detector',     label: 'access-ctrl',   stage: 'needs-code-review' },
+  { id: 'injection-detector',          label: 'injection',     stage: 'needs-code-review' },
+  { id: 'data-protection-detector',    label: 'data-prot',     stage: 'needs-code-review' },
+  { id: 'supply-chain-detector',       label: 'supply-chain',  stage: 'needs-code-review' },
+  { id: 'justification-detector',      label: 'justify',       stage: 'needs-code-review' },
+  { id: 'mock-contract-detector',      label: 'mock',          stage: 'needs-code-review' },
+  { id: 'density-system-detector',     label: 'density',       stage: 'needs-code-review' },
+  { id: 'pipeline-violation-detector', label: 'pipeline-viol', stage: 'needs-code-review' },
+  { id: 'data-validator',              label: 'data-valid',    stage: 'needs-code-review' },
+  { id: 'data-fidelity-reviewer',      label: 'data-fidelity', stage: 'needs-code-review' },
+
+  // regression — CI-failure triage rides the verification gate
+  { id: 'ci-triage',            label: 'ci-triage',   stage: 'needs-regression-check' },
+
+  // ready-for-human — keep the branch current + ship the docs
+  { id: 'branch-updater',          label: 'branch-upd', stage: 'ready-for-human' },
+  { id: 'technical-docs-manager',  label: 'docs',       stage: 'ready-for-human' },
 ];
 
-// Lay the chips out into positioned nodes + feed descriptors. Pure: given the
-// canvas width and row Y-coordinates, returns chip nodes keyed by agent id and a
-// flat list of feed edges ({ id, from: chipId, to: spine node id }).
-export function bandLayout(view = { w: 1260 }, rows = BAND_ROW_Y) {
-  const marginX = 90;
-  const byRow = new Map();
+// Lay the agents out into columns anchored under their spine stage. Pure: given
+// the spine nodes (for each stage's x), returns chip nodes keyed by agent id and
+// one faint feed per column (stage → the column's bottom chip, so a single stem
+// runs behind the stack).
+export function bandLayout(spineNodes, top = BAND_TOP) {
+  const byStage = new Map();
   for (const a of BAND_AGENTS) {
-    if (!byRow.has(a.row)) byRow.set(a.row, []);
-    byRow.get(a.row).push(a);
+    if (!byStage.has(a.stage)) byStage.set(a.stage, []);
+    byStage.get(a.stage).push(a);
   }
   const chips = {};
   const feeds = [];
-  for (const [row, list] of byRow) {
-    const y = rows[row];
-    const span = view.w - marginX * 2;
-    const slot = span / list.length;
+  for (const [stage, list] of byStage) {
+    const sx = spineNodes[stage] ? spineNodes[stage].x : 0;
     list.forEach((a, i) => {
-      const x = marginX + slot * (i + 0.5);
       chips[a.id] = {
         label: a.label,
         agent: a.id,
-        x: Math.round(x),
-        y,
+        x: sx,
+        y: top + i * ROW_STEP,
+        w: CHIP_W,
+        h: CHIP_H,
         kind: 'agent',
-        w: Math.round(Math.min(slot - 10, 128)),
       };
-      feeds.push({ id: `band:${a.id}`, from: a.id, to: a.feeds });
     });
+    const bottom = list[list.length - 1].id;
+    feeds.push({ id: `band:${stage}`, from: stage, to: bottom });
   }
   return { chips, feeds };
 }
