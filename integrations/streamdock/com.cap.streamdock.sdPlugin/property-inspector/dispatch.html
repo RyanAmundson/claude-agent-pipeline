@@ -1,0 +1,30 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Dispatch Agent</title></head>
+<body>
+  <label>Agent <input id="agent" placeholder="scanner"></label><br>
+  <label>Prompt <input id="prompt" placeholder="Pick up the top ready ticket and proceed."></label><br>
+  <label>Target override <input id="targetOverride" placeholder="(blank = active project)"></label><br>
+  <label>Mode
+    <select id="mode"><option value="stream">stream (live status)</option>
+      <option value="detach">detach (fire-and-forget)</option></select></label>
+  <script>
+    let ws, ctx, settings = {};
+    function connectElgatoStreamDeckSocket(port, uuid, event, info, settingsJson) {
+      ctx = uuid; ws = new WebSocket('ws://127.0.0.1:' + port);
+      ws.onopen = () => ws.send(JSON.stringify({ event, uuid }));
+      ws.onmessage = (e) => {
+        const m = JSON.parse(e.data);
+        if (m.event === 'didReceiveSettings') { settings = m.payload.settings || {}; fill(); }
+      };
+    }
+    function fill() {
+      for (const id of ['agent','prompt','targetOverride','mode'])
+        if (settings[id] != null) document.getElementById(id).value = settings[id];
+    }
+    function save() {
+      for (const id of ['agent','prompt','targetOverride','mode'])
+        settings[id] = document.getElementById(id).value;
+      ws.send(JSON.stringify({ event: 'setSettings', context: ctx, payload: settings }));
+    }
+    document.addEventListener('input', save);
+  </script>
+</body></html>
