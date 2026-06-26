@@ -20,7 +20,7 @@ import {
 import { join, resolve, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { STATES } from '../api/index.js';
+import { STATES, FEATURE_STATES } from '../api/index.js';
 
 const NEEDS_WORK = 'needs-work';
 const DEFAULT_PLAN_PRIORITY = 2;
@@ -147,11 +147,12 @@ export function defaultScanPlans(dirs, target) {
   return plans;
 }
 
-// All ticket file basenames currently in the queue, across every state — the
-// idempotency key set.
+// All ticket file basenames currently in the queue, across every state (ticket
+// AND feature states) — the idempotency key set. Projected ids never land in a
+// feature:* dir, but scanning them keeps the "every state" guarantee literal.
 export function existingTicketIds(queueDir) {
   const ids = new Set();
-  for (const state of STATES) {
+  for (const state of [...STATES, ...FEATURE_STATES]) {
     const dir = join(queueDir, state);
     let entries;
     try {

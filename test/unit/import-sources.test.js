@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   importSources, planIsComplete, planSlug, safeBasename, beadToTicket, planToTicket,
+  defaultScanPlans,
 } from '../../runner/import-sources.js';
 
 function tmpTarget() {
@@ -97,6 +98,26 @@ test('safeBasename flattens path separators and colons; planSlug is stable+safe'
   // planSlug is a filesystem-safe display slug (not the join id) — stable across calls.
   assert.equal(planSlug('.plans/2026-Foo Bar.md'), planSlug('.plans/2026-Foo Bar.md'));
   assert.match(planSlug('.plans/2026-Foo Bar.md'), /^[a-z0-9-]+$/);
+});
+
+test('defaultScanPlans produces CM-matching relativePath, title, and completeness over a real dir', () => {
+  const target = tmpTarget();
+  mkdirSync(join(target, '.plans'), { recursive: true });
+  writeFileSync(join(target, '.plans', 'open.md'), '# Open Plan\n\n- [ ] todo\n');
+  writeFileSync(join(target, '.plans', 'done.md'), '# Done Plan\n\n- [x] finished\n');
+  writeFileSync(join(target, '.plans', 'notes.txt'), 'ignored — not markdown');
+
+  const plans = defaultScanPlans(['.plans'], target).sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  assert.equal(plans.length, 2, 'only .md files scanned');
+  const open = plans.find((p) => p.relativePath === '.plans/open.md');
+  // relativePath is the load-bearing join key — must be `${dirRel}/${filename}` verbatim.
+  assert.ok(open, 'relativePath uses the configured dir string verbatim');
+  assert.equal(open.title, 'Open Plan', 'title from first heading');
+  assert.equal(open.complete, false);
+  assert.equal(planToTicket(open, 'NOW').id, 'plan:.plans/open.md', 'feeds the canonical CM join id');
+  const done = plans.find((p) => p.relativePath === '.plans/done.md');
+  assert.equal(done.complete, true, 'all-checked plan is complete (→ skipped by importSources)');
+  rmSync(target, { recursive: true, force: true });
 });
 
 test('beadToTicket/planToTicket build the documented shape', () => {
