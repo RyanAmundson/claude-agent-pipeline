@@ -23,6 +23,7 @@ pipeline:needs-test-review     ?    → dispatch tester
 pipeline:needs-code-review     ?    → dispatch code-reviewer
 pipeline:needs-detector-gate   ?    → run runner/detector-gate.js (diff-mode detector panel)
 pipeline:needs-regression-check   ?    → dispatch regression-tester
+pipeline:needs-runtime-qa     ?    → run runner/runtime-qa-gate.js (runtime-QA member fan-out)
 pipeline:needs-feature-validation ?    → dispatch feature-validator
 pipeline:needs-feedback        ?    → dispatch feedback-responder
 pipeline:needs-conflict-resolution ? → dispatch conflict-resolver
@@ -78,6 +79,7 @@ Dispatch mapping:
 | `pipeline:needs-code-review` | code-reviewer | `.agents/code-reviewer.md` |
 | `pipeline:needs-detector-gate` (only when `config.detectors.diffGate.enabled`, default true) | `runner/detector-gate.js` (diff-mode detector fan-out) | — |
 | `pipeline:needs-regression-check` | regression-tester | `.agents/regression-tester.md` |
+| `pipeline:needs-runtime-qa` (only when `config.runtimeQa.enabled`, default true) | `runner/runtime-qa-gate.js` (runtime-QA member fan-out) | — |
 | `pipeline:needs-feature-validation` | feature-validator | `.agents/feature-validator.md` |
 | `pipeline:needs-feedback` | feedback-responder | `.agents/feedback-responder.md` |
 | `pipeline:needs-conflict-resolution` | conflict-resolver | `.agents/conflict-resolver.md` |
@@ -111,6 +113,8 @@ For stages with multiple items, dispatch multiple agents of the same role — ea
 **Finding-type routing (`domain:pipeline-improvement`).** These findings route by type, not all to one agent: `improvement-finding` (from transcript-reviewer) and `improvement-regression` (from pipeline-evaluator) → `agent-improver`; `capability-gap` (from pipeline-evaluator) → `agent-architect`; `strategy-finding` (from pipeline-evaluator) stays in `pipeline:needs-triage` for the human (no auto-dispatch).
 
 - **`pipeline:needs-detector-gate`** (only when `config.detectors.diffGate.enabled`, default true): trigger `runner/detector-gate.js` for the PR. It fans out the diff-mode detectors whose glob+prefilter match the PR's changed files, persists `.pipeline/reviews/<pr>/detector-*.json`, and computes the severity gate: any `blocker`/`major` (or any `veto`) → re-label `pipeline:needs-feedback` (feedback-responder consumes it); otherwise advance to the next state (`pipeline:needs-regression-check`, or `pipeline:ready-for-human` if the regression/feature gates are disabled). When `diffGate.enabled` is false, `code-reviewer` advances straight past this state with no panel.
+
+- **`pipeline:needs-runtime-qa`** (only when `config.runtimeQa.enabled`, default true): trigger `runner/runtime-qa-gate.js` for the PR. It path-gates the runtime-QA members to the PR's changed surfaces (data-validator always runs), fans them out against the running app, folds in each member's captured console errors, persists `.pipeline/reviews/<pr>/runtime-qa-*.json`, and computes the severity gate: any `blocker`/`major` (or any `veto`) → re-label `pipeline:needs-feedback`; otherwise advance to `pipeline:needs-feature-validation`. When `runtimeQa.enabled` is false, `regression-tester` advances straight to `needs-feature-validation` with no panel. If the app/`agent-browser` is unavailable, the members post a blocker, which routes the PR to `pipeline:needs-feedback` (no server is started).
 
 ### 3.5. Self-Audit (every cycle)
 

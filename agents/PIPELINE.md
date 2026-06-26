@@ -33,7 +33,8 @@ The label namespace is configurable — defaults below assume `labelNamespace = 
 | `pipeline:needs-test-review` | PR open, needs test coverage review | tester |
 | `pipeline:needs-code-review` | Tests reviewed, needs code quality review | code-reviewer |
 | `pipeline:needs-regression-check` | Code review passed; needs regression validation | regression-tester |
-| `pipeline:needs-feature-validation` | Regression passed; needs feature/acceptance validation | feature-validator |
+| `pipeline:needs-runtime-qa` | Regression passed; needs runtime-QA validation in the running app | runtime-qa gate (`*-validator` members) |
+| `pipeline:needs-feature-validation` | Runtime-QA passed; needs feature/acceptance validation | feature-validator |
 | `pipeline:needs-feedback` | Review feedback needs addressing | feedback-responder |
 | `pipeline:needs-conflict-resolution` | PR branch conflicts with main, needs a merge resolution. Replaces `pipeline:ready-for-human` while outstanding — a conflicted PR is not mergeable, so it leaves the human-review queue until the conflict-resolver clears it | conflict-resolver |
 | `pipeline:resolving-conflicts` | conflict-resolver has claimed the PR and is resolving (lock) | conflict-resolver |
@@ -140,6 +141,7 @@ The human's manual interventions are the pipeline's training signal. The goal is
 | tester | `pipeline:needs-test-review` items exist |
 | code-reviewer | `pipeline:needs-code-review` items exist |
 | regression-tester | `pipeline:needs-regression-check` items exist |
+| runtime-qa-gate (`runner/runtime-qa-gate.js`) | `pipeline:needs-runtime-qa` items exist |
 | feature-validator | `pipeline:needs-feature-validation` items exist |
 | feedback-responder | `pipeline:needs-feedback` items or unresolved human comments exist |
 | conflict-resolver | `pipeline:needs-conflict-resolution` items, or open PRs that conflict with main |

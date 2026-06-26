@@ -43,7 +43,7 @@ If the user picks Filesystem:
 - Confirm `config.filesystem.queueDir` (default `.pipeline/queue`)
 - Create the queue directory tree:
   ```bash
-  mkdir -p .pipeline/queue/{needs-triage,needs-review,needs-work,in-progress,needs-test-review,needs-code-review,needs-regression-check,needs-feature-validation,needs-feedback,ready-for-human,done,needs-info,done-triage}
+  mkdir -p .pipeline/queue/{needs-triage,needs-review,needs-work,in-progress,needs-test-review,needs-code-review,needs-regression-check,needs-runtime-qa,needs-feature-validation,needs-feedback,ready-for-human,done,needs-info,done-triage}
   ```
 - Create the `.lock` file: `touch .pipeline/queue/.lock`
 
@@ -75,6 +75,7 @@ gh label create "$labelNamespace:in-progress"         --color "5319E7" --descrip
 gh label create "$labelNamespace:needs-test-review"   --color "FBCA04" --description "PR needs test coverage review"
 gh label create "$labelNamespace:needs-code-review"   --color "FBCA04" --description "PR needs code review"
 gh label create "$labelNamespace:needs-regression-check"   --color "FBCA04" --description "PR needs regression validation"
+gh label create "$labelNamespace:needs-runtime-qa"        --color "FBCA04" --description "PR needs runtime-QA validation"
 gh label create "$labelNamespace:needs-feature-validation" --color "FBCA04" --description "PR needs feature/acceptance validation"
 gh label create "$labelNamespace:needs-feedback"      --color "D93F0B" --description "Review feedback to address"
 gh label create "$labelNamespace:ready-for-human"     --color "0E8A16" --description "All automated checks pass"
@@ -85,7 +86,7 @@ gh label create "$labelNamespace:ready-for-human"     --color "0E8A16" --descrip
 gh label create "$labelNamespace:agent-mergeable"     --color "1D76DB" --description "Human-authorized for the merge-agent to land (small, fully-verified)"
 
 # Agent provenance labels
-for agent in scanner ticket-creator ticket-reviewer worker tester code-reviewer regression-tester feature-validator feedback-responder flex-worker orchestrator branch-updater cleanup ci-triage a11y-detector perf-detector security-detector supply-chain-detector access-control-detector injection-detector data-protection-detector data-fidelity-reviewer glossary-maintainer e2e-test-runner e2e-test-quality simplify merge-agent; do
+for agent in scanner ticket-creator ticket-reviewer worker tester code-reviewer regression-tester feature-validator feedback-responder flex-worker orchestrator branch-updater cleanup ci-triage a11y-detector perf-detector security-detector supply-chain-detector access-control-detector injection-detector data-protection-detector data-fidelity-reviewer glossary-maintainer e2e-test-runner e2e-test-quality simplify merge-agent interaction-validator visual-validator state-validator network-validator responsive-validator a11y-validator perf-validator; do
   gh label create "$agentLabelNamespace:$agent" --color "C5DEF5" --description "Provenance: $agent"
 done
 
