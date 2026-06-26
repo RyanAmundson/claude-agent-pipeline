@@ -202,6 +202,13 @@
         "chrome-devtools"
       ]
     },
+    "interaction-validator": { "stage": "quality", "requires": ["github", "agent-browser"] },
+    "visual-validator":      { "stage": "quality", "requires": ["github", "agent-browser"] },
+    "state-validator":       { "stage": "quality", "requires": ["github", "agent-browser"] },
+    "network-validator":     { "stage": "quality", "requires": ["github", "agent-browser"] },
+    "responsive-validator":  { "stage": "quality", "requires": ["github", "agent-browser"] },
+    "a11y-validator":        { "stage": "quality", "requires": ["github", "agent-browser"] },
+    "perf-validator":        { "stage": "quality", "requires": ["github", "agent-browser"] },
     "code-reviewer": {
       "stage": "review",
       "requires": [

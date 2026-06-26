@@ -149,6 +149,26 @@ On discrepancy found:
 
 If critical: dispatch a worker immediately rather than waiting for the normal cycle.
 
+## Gate mode (runtime-QA member)
+
+When dispatched as the runtime-QA `data` member on a PR (state `pipeline:needs-runtime-qa`), do NOT file tickets. Instead:
+
+1. Scope the DB→API→service→hook→component trace to the metrics on the PR's **changed pages** only.
+2. Apply the tolerances above.
+3. Emit your verdict as your **final message** — a single fenced json block (the runner parses it and writes the verdict file; you write no files in this mode):
+
+```json
+{
+  "verdict": "pass | veto",
+  "summary": "one line",
+  "findings": [
+    { "severity": "blocker|major|minor|nit", "screen": "/route", "title": "metric drift", "detail": "DB=127 vs UI=4 (hook filter)", "evidence": "src/.../useStats.ts:23" }
+  ]
+}
+```
+
+Set `verdict: "veto"` iff at least one `blocker`/`major` drift. Drift introduced by a transformation (stages 3–5) is `major` regardless of size; within-tolerance surprises are `minor`.
+
 ## Connecting to Dev DB
 
 ```bash
