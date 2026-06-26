@@ -494,11 +494,24 @@ function onCycleReport(cycle) {
   if (agentsBuilt && latestSnap) updateAgentStatuses(latestSnap);
 }
 
+// Live-reload state. The server's `hello` frame carries a per-process bootId;
+// when it changes the server was restarted (`ui --watch`), so we reload to pull
+// fresh assets. devReload also tightens the reconnect delay so the brief gap
+// during a restart is caught quickly rather than after the prod 3s backoff.
+let serverBootId = null;
+let reconnectDelayMs = 3000;
+
 function connectEvents() {
   if (esEvents) esEvents.close();
   esEvents = new EventSource('/api/v1/events');
   esEvents.onmessage = ev => {
     let data; try { data = JSON.parse(ev.data); } catch { return; }
+    if (data.type === 'hello') {
+      if (data.devReload) reconnectDelayMs = 400;
+      if (serverBootId === null) serverBootId = data.bootId;
+      else if (data.bootId !== serverBootId) { location.reload(); }
+      return;
+    }
     if (data.type === 'snapshot') return onSnapshot(data.data);
     if (data.type === 'cycle.report') return onCycleReport(data.cycle);
     if (refetchTimer) return;
@@ -510,7 +523,7 @@ function connectEvents() {
   esEvents.onerror = () => {
     esEvents.close();
     esEvents = null;
-    setTimeout(connectEvents, 3000);
+    setTimeout(connectEvents, reconnectDelayMs);
   };
 }
 
