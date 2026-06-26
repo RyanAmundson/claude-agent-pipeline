@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapIssueToTicket } from '../../runner/mirror-sync.js';
+import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { mapIssueToTicket, applyMirror } from '../../runner/mirror-sync.js';
 
 const NOW = '2026-06-26T00:00:00.000Z';
 
@@ -30,4 +33,40 @@ test('mapIssueToTicket: extracts state from the pipeline:<state> label', () => {
 test('mapIssueToTicket: returns null when no pipeline state label present', () => {
   const issue = { identifier: 'CER-9', title: 'x', labels: { nodes: [{ name: 'smell' }] } };
   assert.equal(mapIssueToTicket(issue, { namespace: 'pipeline', now: NOW }), null);
+});
+
+function tmpTarget() { return mkdtempSync(join(tmpdir(), 'mirror-')); }
+function qpath(t, state, id) { return join(t, '.pipeline', 'queue', state, `${id}.json`); }
+
+test('applyMirror: creates a ticket file in the right state dir', () => {
+  const t = tmpTarget();
+  try {
+    const entry = { ticket: { id: 'CER-1', title: 'a', _syncedAt: NOW }, state: 'needs-work' };
+    const res = applyMirror(t, [entry], { now: NOW });
+    assert.equal(res.created, 1);
+    assert.ok(existsSync(qpath(t, 'needs-work', 'CER-1')));
+    assert.equal(JSON.parse(readFileSync(qpath(t, 'needs-work', 'CER-1'), 'utf8')).id, 'CER-1');
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test('applyMirror: re-applying identical entry is unchanged (idempotent)', () => {
+  const t = tmpTarget();
+  try {
+    const entry = { ticket: { id: 'CER-1', title: 'a', _syncedAt: NOW }, state: 'needs-work' };
+    applyMirror(t, [entry], { now: NOW });
+    const res = applyMirror(t, [entry], { now: NOW });
+    assert.equal(res.unchanged, 1);
+    assert.equal(res.created, 0);
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test('applyMirror: moves a ticket when its state changed', () => {
+  const t = tmpTarget();
+  try {
+    applyMirror(t, [{ ticket: { id: 'CER-1', _syncedAt: NOW }, state: 'needs-work' }], { now: NOW });
+    const res = applyMirror(t, [{ ticket: { id: 'CER-1', _syncedAt: NOW }, state: 'in-progress' }], { now: NOW });
+    assert.equal(res.moved, 1);
+    assert.ok(!existsSync(qpath(t, 'needs-work', 'CER-1')));
+    assert.ok(existsSync(qpath(t, 'in-progress', 'CER-1')));
+  } finally { rmSync(t, { recursive: true, force: true }); }
 });

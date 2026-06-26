@@ -2,6 +2,9 @@
 // Zero runtime deps (node:* only). Poll-driven (relay-free); Plan 2 reuses
 // applyMirror() for webhook push.
 
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
 const VALID_STATES = new Set([
   'needs-triage', 'needs-review', 'needs-work', 'in-progress',
   'needs-test-review', 'needs-code-review', 'needs-detector-gate',
@@ -42,4 +45,56 @@ export function mapIssueToTicket(issue, opts) {
     _source: 'reconcile',
   };
   return { ticket, state };
+}
+
+const ALL_STATES = [...VALID_STATES];
+
+function queueDir(target) { return join(resolve(target), '.pipeline', 'queue'); }
+function ticketPath(target, state, id) { return join(queueDir(target), state, `${id}.json`); }
+
+function writeAtomic(path, obj) {
+  mkdirSync(join(path, '..'), { recursive: true });
+  const tmp = `${path}.tmp.${process.pid}`;
+  writeFileSync(tmp, JSON.stringify(obj, null, 2));
+  renameSync(tmp, path);
+}
+
+/** Find which state dir currently holds <id>, or null. */
+function findExistingState(target, id) {
+  for (const state of ALL_STATES) {
+    if (existsSync(ticketPath(target, state, id))) return state;
+  }
+  return null;
+}
+
+/**
+ * @param {string} target
+ * @param {Array<{ ticket: object, state: string }>} entries
+ * @param {{ now: string }} _opts
+ */
+export function applyMirror(target, entries, _opts) {
+  const res = { created: 0, updated: 0, moved: 0, unchanged: 0 };
+  for (const { ticket, state } of entries) {
+    const id = ticket.id;
+    const dest = ticketPath(target, state, id);
+    const prevState = findExistingState(target, id);
+
+    if (prevState && prevState !== state) {
+      unlinkSync(ticketPath(target, prevState, id));
+      writeAtomic(dest, ticket);
+      res.moved += 1;
+      continue;
+    }
+    if (!prevState) {
+      writeAtomic(dest, ticket);
+      res.created += 1;
+      continue;
+    }
+    // same state already present — write only if content differs
+    const current = readFileSync(dest, 'utf8');
+    const next = JSON.stringify(ticket, null, 2);
+    if (current === next) { res.unchanged += 1; }
+    else { writeAtomic(dest, ticket); res.updated += 1; }
+  }
+  return res;
 }
