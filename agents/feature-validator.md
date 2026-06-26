@@ -57,6 +57,21 @@ For each criterion:
 
 Requires the app to be running. If the app/dev server is not available, report the blocker and stop — do NOT start a server yourself (orphaned-process rule). `agent-browser` is required for this agent; if it is unavailable, report that and stop.
 
+## 2a. Reachability is a prerequisite — do NOT work around it
+
+Before validating a criterion that targets a specific surface, confirm a **real user can reach that surface through normal app navigation**. A criterion is only validatable on a surface that is genuinely reachable.
+
+**Reachability proof — exactly ONE of these must hold:**
+- **(a) A real navigation path** — a `<Link>`, `navigate()` call, sidebar entry, menu item, or button in the running app that lands on the surface under normal flow, and you actually traverse it in agent-browser.
+- **(b) An observable rendered symptom** — a visible artifact a user encounters on a page they normally land on (broken icon, wrong label, crash) that proves the surface renders in production.
+
+**These are NOT reachability — treat each as a RED FLAG, never a pass:**
+- Hand-typing a URL that nothing in the app links to.
+- Serving the build at a non-standard root / sub-path so an orphaned route resolves.
+- "The render call-site exists in source" or "a route entry exists in `routes.tsx`" — source may be dead code; the route may be orphaned (nothing links to it).
+
+If reaching the target surface requires any red-flag workaround, you have only proven the component can mount in isolation — NOT that any user sees it. **Stop and return BLOCKED (Section 4).** Never convert your own workaround into evidence of user reachability. (Lesson: PR #1156 / CER-3217 — a fix validated on a surface no user could reach was closed by the human.)
+
 ## 3. Evidence table & artifacts
 
 Build one row per criterion: `criterion → met/unmet → screenshot path`. Screenshots live under `.pipeline/evidence/<id>/`. In the verdict comment, reference each screenshot by path (filesystem/Linear: attach via the Linear attachment tool when available).
@@ -65,13 +80,14 @@ Build one row per criterion: `criterion → met/unmet → screenshot path`. Scre
 
 - **PASS** only when EVERY criterion is met with a screenshot → `ready-for-human`.
 - **FAIL** when any criterion is unmet or unverifiable → `needs-feedback`, listing the specific gaps with a screenshot of the current wrong/missing state.
+- **BLOCKED / INCOMPLETE** when the target surface is **unreachable via normal user navigation** (Section 2a) → `needs-feedback`. Do NOT pass by working around the unreachability. The verdict must read: "Surface unreachable via normal user navigation — cannot validate this ticket without a reachable entry point. Filing as BLOCKED / INCOMPLETE." State what you tried and why it counts as a workaround, so a human can add a reachable entry point or close the ticket.
 
 ## 5. Output format
 
 ```markdown
 [agent:feature-validator]
 
-### Feature validation — {PASS|FAIL}
+### Feature validation — {PASS|FAIL|BLOCKED}
 
 Ticket: {id} — {title}
 
@@ -80,6 +96,7 @@ Ticket: {id} — {title}
 | 1 | {criterion}          | ✅ met / ❌ unmet | {screenshot path} |
 
 {On FAIL: numbered list of unmet/unverifiable criteria with what's missing and the screenshot of the current state}
+{On BLOCKED: name the unreachable surface, the navigation paths you searched for, and the workaround you refused to treat as proof (Section 2a)}
 
 Generated with [Claude Code](https://claude.ai/code)
 ```
