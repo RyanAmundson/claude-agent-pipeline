@@ -429,24 +429,18 @@ async function runFeature(positional, flags) {
 }
 
 async function runImportSources(flags) {
-  const { importSources } = await import('../runner/import-sources.js');
+  const { importSourcesFromConfig } = await import('../runner/import-sources.js');
   const target = targetOf(flags);
   // Opt-in: the projector does nothing unless `.pipeline/config.json` has a
   // `sources` block. This is intentionally NOT a new `backend` value.
-  let sources = null;
-  const cfgPath = join(target, '.pipeline', 'config.json');
-  if (existsSync(cfgPath)) {
-    try { sources = JSON.parse(readFileSync(cfgPath, 'utf8')).sources ?? null; }
-    catch (err) { die(`import-sources: could not parse ${cfgPath} (${err.message})`); }
-  }
-  if (!sources || (!sources.beads && !(sources.plans && sources.plans.length))) {
-    if (flags.json) { console.log(JSON.stringify({ created: [], skipped: [] })); return; }
+  const res = importSourcesFromConfig(target, { only: flags.only });
+  if (flags.json) { console.log(JSON.stringify({ created: res.created, skipped: res.skipped }, null, 2)); return; }
+  if (!res.configured) {
+    const cfgPath = join(target, '.pipeline', 'config.json');
     console.log(`import-sources: no sources configured. Add a "sources" block to ${cfgPath}, e.g.`);
     console.log(`  { "sources": { "beads": true, "plans": [".plans", ".claude"] } }`);
     return;
   }
-  const res = importSources({ target, sources, only: flags.only });
-  if (flags.json) { console.log(JSON.stringify(res, null, 2)); return; }
   console.log(`import-sources: created ${res.created.length}, skipped ${res.skipped.length}`);
   for (const id of res.created) console.log(`  + ${id}`);
 }

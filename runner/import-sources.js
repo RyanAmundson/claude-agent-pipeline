@@ -211,3 +211,26 @@ export function importSources({
   }
   return { created, skipped };
 }
+
+/**
+ * Read the project's `.pipeline/config.json` `sources` block and project. The
+ * shared entry for both the CLI and the orchestrator pre-cycle step. Opt-in:
+ * returns `{ created:[], skipped:[], configured:false }` when no `sources` block
+ * exists. A malformed config warns and is treated as unconfigured, so callers
+ * stay best-effort.
+ * @returns {{ created: string[], skipped: string[], configured: boolean }}
+ */
+export function importSourcesFromConfig(target, { only = null } = {}) {
+  const cfgPath = join(target, '.pipeline', 'config.json');
+  let sources = null;
+  if (existsSync(cfgPath)) {
+    try {
+      sources = JSON.parse(readFileSync(cfgPath, 'utf8')).sources ?? null;
+    } catch (err) {
+      console.warn(`import-sources: could not parse ${cfgPath} (${err.message}); treating as no sources`);
+    }
+  }
+  const hasSources = sources && (sources.beads || (sources.plans && sources.plans.length));
+  if (!hasSources) return { created: [], skipped: [], configured: false };
+  return { ...importSources({ target, sources, only }), configured: true };
+}
