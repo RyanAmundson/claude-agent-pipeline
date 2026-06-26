@@ -18,6 +18,7 @@ import { createServer as createHttpServer } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { createWatcher, getAgent, getTicket, readSnapshot } from '../api/index.js';
 import { hardReset, startOrchestrator } from '../api/control.js';
 import { createLogStream } from './log-stream.js';
@@ -37,14 +38,20 @@ const MIME = {
 };
 
 /**
- * @param {{ target: string, port?: number, host?: string, pluginRoot?: string }} opts
+ * @param {{ target: string, port?: number, host?: string, pluginRoot?: string,
+ *           devReload?: boolean }} opts
  * @returns {Promise<{ url: string, port: number, close: () => Promise<void> }>}
  */
 export function startServer(opts) {
   const target = resolve(opts.target);
   const host = opts.host || '127.0.0.1';
   const pluginRoot = opts.pluginRoot;
-  const apiOpts = { target, pluginRoot };
+  // A fresh id per server process. The dashboard records it on first connect
+  // and reloads itself when it sees a new one — that's how `ui --watch` makes a
+  // server restart show up in the browser without a manual refresh.
+  const bootId = randomUUID();
+  const devReload = !!opts.devReload;
+  const apiOpts = { target, pluginRoot, bootId, devReload };
 
   // One shared watcher per server; each SSE client gets its own listener.
   const watcher = createWatcher({ target, pluginRoot });
@@ -204,6 +211,9 @@ function openSse(req, res, sseClients, apiOpts) {
     'Connection': 'keep-alive',
     'X-Accel-Buffering': 'no',
   });
+  // Greet first so the client learns this process's bootId before any data.
+  // On a `ui --watch` restart the client sees a new bootId and reloads itself.
+  res.write(`data: ${JSON.stringify({ type: 'hello', bootId: apiOpts.bootId, devReload: apiOpts.devReload })}\n\n`);
   // Replay current state immediately so a fresh client gets a snapshot
   // even if it connected after the watcher's initial emit.
   try {

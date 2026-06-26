@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, lstatSync, unlinkSync, s
 import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync, execFileSync, spawn } from 'node:child_process';
+import { createServer as createNetServer } from 'node:net';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,8 +30,8 @@ Usage:
   agent-pipeline list-agents [--target <p>]   List agents and dep status (target optional)
   agent-pipeline list-presets                 List rule presets
   agent-pipeline detect [--target <p>]        Detect available deps in target environment
-  agent-pipeline ui [--target <p>] [--port N] [--open]
-                                              Launch the local pipeline dashboard
+  agent-pipeline ui [--target <p>] [--port N] [--open] [--watch]
+                                              Launch the local pipeline dashboard (--watch: live-reload on source edits)
   agent-pipeline status [--target <p>] [--json] [--state <name>]
                                               Print pipeline snapshot (queued + active tickets)
   agent-pipeline ticket <id> [--target <p>] [--json]
@@ -85,7 +86,7 @@ function parseFlags(args) {
   const flags = {
     mode: 'symlink', preset: 'minimal', omitRule: [], omitAgent: [], all: false,
     with: [], without: [], dryRun: false, quiet: false, target: null,
-    port: null, open: false, json: false, state: null,
+    port: null, open: false, json: false, state: null, watch: false,
     prompt: null, wait: false, detach: false, stream: false, follow: false, runId: null,
     allowedTools: [], disallowedTools: [], maxBudgetUsd: null, model: null,
     body: null, verdict: null, author: null, data: null,
@@ -107,6 +108,7 @@ function parseFlags(args) {
       case '--quiet': flags.quiet = true; break;
       case '--port': flags.port = Number(args[++i]); break;
       case '--open': flags.open = true; break;
+      case '--watch': flags.watch = true; break;
       case '--json': flags.json = true; break;
       case '--state': flags.state = args[++i]; break;
       case '--prompt': flags.prompt = args[++i]; break;
@@ -424,25 +426,69 @@ async function runFeature(positional, flags) {
   console.log(`  The orchestrator will dispatch feature-spec-writer on its next cycle.`);
 }
 
+function openInBrowser(url) {
+  try {
+    const opener = process.platform === 'darwin' ? 'open'
+                 : process.platform === 'win32' ? 'start'
+                 : 'xdg-open';
+    execSync(`${opener} ${JSON.stringify(url)}`, { stdio: 'ignore' });
+  } catch {}
+}
+
+// Resolve a free TCP port at/after `start` so `ui --watch` can pin a stable URL
+// across restarts (the child binds exactly this port — no drift on rebind).
+function findOpenPort(start) {
+  return new Promise(resolvePort => {
+    const tryPort = (p, left) => {
+      const s = createNetServer();
+      s.once('error', () => { try { s.close(); } catch {} ; left > 0 ? tryPort(p + 1, left - 1) : resolvePort(p); });
+      s.listen(p, '127.0.0.1', () => { const got = s.address().port; s.close(() => resolvePort(got)); });
+    };
+    tryPort(start, 20);
+  });
+}
+
 async function runUi(flags) {
-  const { startServer } = await import('../ui/server.js');
   const target = targetOf(flags);
   if (!existsSync(join(target, '.pipeline', 'queue'))) {
     console.warn(`Note: ${join(target, '.pipeline/queue')} does not exist yet. The dashboard will populate once tickets are created.`);
   }
-  const { url, port } = await startServer({ target, port: flags.port ?? undefined, pluginRoot: PLUGIN_ROOT });
+  if (flags.watch) return runUiWatch(target, flags);
+
+  const { startServer } = await import('../ui/server.js');
+  const { url } = await startServer({ target, port: flags.port ?? undefined, pluginRoot: PLUGIN_ROOT });
   console.log(`agent-pipeline dashboard → ${url}`);
   console.log(`  target: ${target}`);
   console.log(`  press Ctrl+C to stop`);
-  if (flags.open) {
-    try {
-      const opener = process.platform === 'darwin' ? 'open'
-                   : process.platform === 'win32' ? 'start'
-                   : 'xdg-open';
-      execSync(`${opener} ${JSON.stringify(url)}`, { stdio: 'ignore' });
-    } catch {}
-  }
+  if (flags.open) openInBrowser(url);
   // Keep the process alive; the watcher's interval is unrefed so we need this.
+  setInterval(() => {}, 1 << 30);
+}
+
+async function runUiWatch(target, flags) {
+  const { startWatchServer } = await import('../ui/watch.js');
+  const port = await findOpenPort(flags.port ?? 7456);
+  const url = `http://127.0.0.1:${port}/`;
+  console.log(`agent-pipeline dashboard (watch) → ${url}`);
+  console.log(`  target: ${target}`);
+  console.log(`  watching: api/, ui/ — edits restart the server and reload the browser`);
+  console.log(`  press Ctrl+C to stop`);
+  const handle = startWatchServer({
+    root: PLUGIN_ROOT,
+    entry: join(PLUGIN_ROOT, 'ui', 'serve-entry.js'),
+    env: {
+      CAP_UI_TARGET: target,
+      CAP_UI_PORT: String(port),
+      CAP_UI_HOST: '127.0.0.1',
+      CAP_UI_PLUGIN_ROOT: PLUGIN_ROOT,
+    },
+    onRestart: paths => console.log(`  ↻ reload (${paths.map(p => basename(p)).join(', ') || 'source change'})`),
+    log: msg => console.warn(`  watch: ${msg}`),
+  });
+  if (flags.open) openInBrowser(url);
+  const shutdown = () => { handle.close(); process.exit(0); };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
   setInterval(() => {}, 1 << 30);
 }
 
