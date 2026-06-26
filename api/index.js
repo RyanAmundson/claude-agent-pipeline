@@ -132,18 +132,76 @@ function resolvePluginRoot(opts) {
   return opts?.pluginRoot ? resolve(opts.pluginRoot) : PLUGIN_ROOT;
 }
 
+// Resolve the shared `.git` dir for `target`, transparently following a worktree
+// back to its main checkout. A normal checkout has a `.git` directory; a worktree
+// has a `.git` *file* ("gitdir: …/.git/worktrees/<name>") whose `commondir`
+// pointer leads to the shared `.git`. Returns the absolute common-dir path, or
+// null if `target` isn't inside a git repo. Pure fs — no `git` subprocess.
+function gitCommonDir(target) {
+  const dotgit = join(target, '.git');
+  if (!existsSync(dotgit)) return null;
+  try {
+    if (statSync(dotgit).isDirectory()) return dotgit;
+    // Worktree: .git is a file pointing at the per-worktree gitdir.
+    const m = readFileSync(dotgit, 'utf8').match(/^gitdir:\s*(.+?)\s*$/m);
+    if (!m) return null;
+    const gitdir = resolve(dirname(dotgit), m[1]);
+    const cdFile = join(gitdir, 'commondir');
+    if (existsSync(cdFile)) return resolve(gitdir, readFileSync(cdFile, 'utf8').trim());
+    return null;
+  } catch { return null; }
+}
+
+// "owner/name" from a remote URL, matching the config.repo slug shape. Handles
+// both https (github.com/owner/name[.git]) and scp-style (git@host:owner/name).
+function repoSlugFromUrl(url) {
+  if (!url) return null;
+  const s = url.trim()
+    .replace(/\.git$/, '')
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '') // strip scheme://
+    .replace(/^[^@/]+@/, '')                 // strip user@
+    .replace(':', '/');                      // scp host:owner → host/owner
+  const parts = s.split('/').filter(Boolean);
+  return parts.length >= 2 ? parts.slice(-2).join('/') : null;
+}
+
+// "owner/name" of the origin remote, read straight from the git config file.
+function repoSlugFromGit(commonDir) {
+  if (!commonDir) return null;
+  const cfgPath = join(commonDir, 'config');
+  if (!existsSync(cfgPath)) return null;
+  try {
+    const lines = readFileSync(cfgPath, 'utf8').split('\n');
+    let inOrigin = false;
+    for (const line of lines) {
+      const section = line.match(/^\s*\[(.+?)\]\s*$/);
+      if (section) { inOrigin = /^remote\s+"origin"$/.test(section[1].trim()); continue; }
+      if (!inOrigin) continue;
+      const url = line.match(/^\s*url\s*=\s*(.+?)\s*$/);
+      if (url) return repoSlugFromUrl(url[1]);
+    }
+  } catch { /* unreadable config → no slug */ }
+  return null;
+}
+
 // Human-meaningful identity for the target project, so a dashboard watching
-// several products at once can show which one this instance is for. `name` is
-// always present (the target dir's basename); `repo` is the configured slug
-// (config.repo) when set, else null. Absent/malformed config → repo null.
+// several products at once can show which one this instance is for. Identity is
+// resolved most-specific-first so it stays meaningful even inside a worktree
+// (whose dir name is a throwaway hash):
+//   repo: config.repo → git origin slug → null
+//   name: main-repo dir name (worktree-resolved) → target dir basename
 function readProjectMeta(target) {
   let repo = null;
   const cfgPath = join(target, '.pipeline', 'config.json');
   if (existsSync(cfgPath)) {
     try { repo = JSON.parse(readFileSync(cfgPath, 'utf8')).repo || null; }
-    catch { /* malformed config → fall back to the dir name only */ }
+    catch { /* malformed config → fall back to git-derived identity */ }
   }
-  return { name: basename(target), repo, path: target };
+  const commonDir = gitCommonDir(target);
+  if (!repo) repo = repoSlugFromGit(commonDir);
+  // dirname(commonDir) is the main checkout root, even for a worktree target.
+  const name = commonDir ? basename(dirname(commonDir)) : basename(target);
+  return { name, repo, path: target };
 }
 
 /**
