@@ -45,6 +45,8 @@ Usage:
                                               Dispatch a single agent run (default: stream JSONL)
   agent-pipeline feature "<intent>" [--target <p>] [--json]
                                               Create a new feature epic (feature pipeline) from a rough intent
+  agent-pipeline import-sources [--target <p>] [--only <id>] [--json]
+                                              Project bd-ready beads + incomplete plans into the queue as needs-work tickets
   agent-pipeline runs [list] [--target <p>] [--json]
                                               List active + recent agent runs
   agent-pipeline runs <runId> [--target <p>] [--wait|--follow] [--json]
@@ -88,7 +90,7 @@ function parseFlags(args) {
     port: null, open: false, json: false, state: null,
     prompt: null, wait: false, detach: false, stream: false, follow: false, runId: null,
     allowedTools: [], disallowedTools: [], maxBudgetUsd: null, model: null,
-    body: null, verdict: null, author: null, data: null,
+    body: null, verdict: null, author: null, data: null, only: null,
   };
   const positional = [];
   for (let i = 0; i < args.length; i++) {
@@ -125,6 +127,7 @@ function parseFlags(args) {
       case '--verdict': flags.verdict = args[++i]; break;
       case '--author': flags.author = args[++i]; break;
       case '--data': flags.data = args[++i]; break;
+      case '--only': flags.only = args[++i]; break;
       default:
         if (a.startsWith('--')) die(`Unknown flag: ${a}\n\n${HELP}`);
         positional.push(a);
@@ -352,6 +355,7 @@ switch (cmd) {
   case 'events': runEvents(flags); break;
   case 'run':    runRun(positional, flags); break;
   case 'feature': runFeature(positional, flags); break;
+  case 'import-sources': runImportSources(flags); break;
   case 'runs':   runRuns(positional, flags); break;
   case 'cycle':  runCycle(positional, flags); break;
   case 'orchestrator': runOrchestrator(positional, flags); break;
@@ -422,6 +426,29 @@ async function runFeature(positional, flags) {
   console.log(`Created ${id} in feature:needs-spec`);
   console.log(`  ${epic.title}`);
   console.log(`  The orchestrator will dispatch feature-spec-writer on its next cycle.`);
+}
+
+async function runImportSources(flags) {
+  const { importSources } = await import('../runner/import-sources.js');
+  const target = targetOf(flags);
+  // Opt-in: the projector does nothing unless `.pipeline/config.json` has a
+  // `sources` block. This is intentionally NOT a new `backend` value.
+  let sources = null;
+  const cfgPath = join(target, '.pipeline', 'config.json');
+  if (existsSync(cfgPath)) {
+    try { sources = JSON.parse(readFileSync(cfgPath, 'utf8')).sources ?? null; }
+    catch (err) { die(`import-sources: could not parse ${cfgPath} (${err.message})`); }
+  }
+  if (!sources || (!sources.beads && !(sources.plans && sources.plans.length))) {
+    if (flags.json) { console.log(JSON.stringify({ created: [], skipped: [] })); return; }
+    console.log(`import-sources: no sources configured. Add a "sources" block to ${cfgPath}, e.g.`);
+    console.log(`  { "sources": { "beads": true, "plans": [".plans", ".claude"] } }`);
+    return;
+  }
+  const res = importSources({ target, sources, only: flags.only });
+  if (flags.json) { console.log(JSON.stringify(res, null, 2)); return; }
+  console.log(`import-sources: created ${res.created.length}, skipped ${res.skipped.length}`);
+  for (const id of res.created) console.log(`  + ${id}`);
 }
 
 async function runUi(flags) {
