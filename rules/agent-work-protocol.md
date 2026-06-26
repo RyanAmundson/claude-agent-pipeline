@@ -14,6 +14,23 @@ This protocol enables:
 
 ---
 
+## Read the mirror, confirm-live before writing (Linear backend)
+
+When config.backend = "linear", the local .pipeline/queue/ is a READ MIRROR of
+Linear, refreshed each orchestrator cycle. For DISCOVERY and CONTEXT (what tickets
+exist, their state, labels, claim), READ THE MIRROR via the queue helpers / read
+API — do NOT query Linear live. This is what eliminates redundant empty queries.
+
+Before any STATE CHANGE (claim, transition/label change, comment that gates a
+handoff), CONFIRM-LIVE: re-fetch just that one issue from Linear, verify it still
+holds the state you read from the mirror, then write live to Linear. Never treat
+the mirror as authority for a decision to mutate. The mirror self-heals from your
+write on the next cycle — do not hand-edit mirror files.
+
+Exception: a dedup/freshness guard that gates a *create* (searching Linear to avoid making a duplicate) MUST read Linear live — the mirror can lag a full cycle, and a missed duplicate is the failure being prevented.
+
+---
+
 ## Process Management (CRITICAL)
 
 Orphaned test processes are the #1 cause of RAM exhaustion on the development machine. All agents must follow these rules:

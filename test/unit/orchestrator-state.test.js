@@ -62,3 +62,26 @@ test('writeOrchestratorState writes atomically (no .tmp left behind)', () => {
     assert.equal(existsSync(orchestratorStatePath(d) + '.tmp'), false);
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
+
+// recordMirrorSync — Task 5
+import { recordMirrorSync } from '../../api/orchestrator.js';
+
+test('recordMirrorSync: persists lastMirrorSyncAt', () => {
+  const d = workdir();
+  try {
+    recordMirrorSync(d, { at: '2026-06-26T01:02:03.000Z' });
+    const state = readOrchestratorState(d);
+    assert.equal(state.lastMirrorSyncAt, '2026-06-26T01:02:03.000Z');
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+test('recordMirrorSync: does not clobber pre-existing fields', () => {
+  const d = workdir();
+  try {
+    writeOrchestratorState(d, { state: 'running', supervisorPid: process.pid });
+    recordMirrorSync(d, { at: '2026-06-26T01:02:03.000Z' });
+    const state = readOrchestratorState(d);
+    assert.equal(state.lastMirrorSyncAt, '2026-06-26T01:02:03.000Z', 'lastMirrorSyncAt stamped');
+    assert.equal(state.state, 'running', 'pre-existing state field preserved');
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});

@@ -7,6 +7,8 @@ import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync, execFileSync, spawn } from 'node:child_process';
 import { createServer as createNetServer } from 'node:net';
+import { runMirrorSync } from '../runner/mirror-sync.js';
+import { recordMirrorSync } from '../api/orchestrator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -60,6 +62,8 @@ Usage:
                                               Record an orchestrator cycle + print the formatted status block
   agent-pipeline orchestrator <sub>           start|pause|resume|restart|stop|status the orchestrator supervisor
   agent-pipeline watch [--target <p>]         Live terminal dashboard (TUI) of queue, runs, and cycles
+  agent-pipeline mirror sync --issues <path> [--target <p>] [--namespace <ns>]
+                                              Sync Linear issues JSON into the local queue mirror
   agent-pipeline version                      Print version
 
 Install options:
@@ -90,6 +94,7 @@ function parseFlags(args) {
     prompt: null, wait: false, detach: false, stream: false, follow: false, runId: null,
     allowedTools: [], disallowedTools: [], maxBudgetUsd: null, model: null,
     body: null, verdict: null, author: null, data: null,
+    issues: null, namespace: null,
   };
   const positional = [];
   for (let i = 0; i < args.length; i++) {
@@ -127,6 +132,8 @@ function parseFlags(args) {
       case '--verdict': flags.verdict = args[++i]; break;
       case '--author': flags.author = args[++i]; break;
       case '--data': flags.data = args[++i]; break;
+      case '--issues': flags.issues = args[++i]; break;
+      case '--namespace': flags.namespace = args[++i]; break;
       default:
         if (a.startsWith('--')) die(`Unknown flag: ${a}\n\n${HELP}`);
         positional.push(a);
@@ -358,6 +365,7 @@ switch (cmd) {
   case 'cycle':  runCycle(positional, flags); break;
   case 'orchestrator': runOrchestrator(positional, flags); break;
   case 'watch':  runWatchCmd(flags); break;
+  case 'mirror': runMirror(positional, flags); break;
   case '_supervise': runSupervise(positional, flags); break;  // internal: detached supervisor
   case '_orchestrate-supervise': runOrchestrateSupervise(flags); break;  // internal: detached orchestrator supervisor
   default: die(`Unknown command: ${cmd}\n\n${HELP}`);
@@ -675,6 +683,28 @@ async function runWatchCmd(flags) {
   }
   const { runWatch } = await import('./watch.js');
   await runWatch({ target: targetOf(flags), pluginRoot: PLUGIN_ROOT });
+}
+
+function runMirror(positional, flags) {
+  if (positional[0] !== 'sync') {
+    console.error('usage: agent-pipeline mirror sync --issues <path> [--target <p>] [--namespace <ns>]');
+    process.exit(2);
+  }
+  if (!flags.issues) {
+    console.error('mirror sync: --issues <path> is required');
+    process.exit(2);
+  }
+  const target = targetOf(flags);
+  const namespace = flags.namespace || 'pipeline';
+  let raw;
+  try { raw = JSON.parse(readFileSync(flags.issues, 'utf8')); }
+  catch (e) { console.error(`mirror sync: cannot read ${flags.issues}: ${e.message}`); process.exit(1); }
+  const issues = Array.isArray(raw) ? raw : (raw.issues ?? []);
+  const now = new Date().toISOString();
+  const res = runMirrorSync(target, issues, { namespace, now });
+  recordMirrorSync(target, { at: now });
+  console.log(`mirror sync: mapped ${res.mapped}, skipped ${res.skipped}, retired ${res.retired}`);
+  process.exit(0);
 }
 
 function renderEvent(ev, flags, { runsOnly = false } = {}) {

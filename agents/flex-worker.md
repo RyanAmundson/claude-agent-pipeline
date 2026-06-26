@@ -94,7 +94,7 @@ The dispatchable agents are:
 
 For each agent, run the queries described in its `### Identify` section:
 
-**Linear queries** — use `mcp__linear__list_issues` with each agent's keywords and state filters. If the team name "CER" doesn't work, use `mcp__linear__list_teams` to find the correct team first.
+**Linear queries** — read tickets from the local mirror (`.pipeline/queue/`) using the queue helpers / read API. Match each agent's keywords and state filters against the mirror files. Do NOT call `mcp__linear__list_issues` for discovery — the mirror is the source of truth for bulk ticket scanning and eliminates redundant live queries.
 
 **GitHub queries** — use `gh pr list` and `gh issue list` with each agent's filters.
 
