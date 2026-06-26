@@ -178,6 +178,32 @@ orchestrator can dispatch `next.agent`, skip a step whose `when` guard is false
 
 Step transitions are mirrored into `events.jsonl` as `molecule` events.
 
+## Source projection (`import-sources`)
+
+`agent-pipeline import-sources` projects the host project's **real work sources**
+into this queue as `needs-work` tickets, so the orchestrator routes them like any
+other ticket. It is **not** a new `backend` — the filesystem queue is the universal
+ingestion seam, and the projector just drops ticket files into `needs-work/`.
+
+- **Sources** (opt-in via `.pipeline/config.json` `sources`):
+  - `beads: true` → each `bd ready` bead becomes a ticket id `bead:<beadId>`.
+  - `plans: [dirs]` → each **incomplete** `*.md` plan (no checkboxes, or any `- [ ]`
+    unchecked) becomes one ticket id `plan:<dir>/<file>.md`. Fully-checked plans are skipped.
+- **Idempotent:** a ticket is created only if its id is absent from **every** state,
+  so an item already `in-progress` / `done` is never resurrected or duplicated.
+- **One-way:** never writes back to beads or plans.
+- **Cadence:** the orchestrator supervisor runs it before each dispatch cycle
+  (best-effort — a failed import never breaks the cycle). `--only <id>` projects a
+  single named item on demand.
+
+```json
+{ "sources": { "beads": true, "plans": [".plans", ".claude"] } }
+```
+
+The ticket's JSON `id` is canonical (`bead:<id>` / `plan:<relativePath>`); the file
+basename sanitizes `/` and `:` to `_` for flat storage, so `id` ≠ basename for
+nested plans. Host observers (e.g. context-manager) join on the JSON `id`.
+
 ## Audit log (`events.jsonl`)
 
 `<queue-dir>/events.jsonl` is the append-only history of every state transition,

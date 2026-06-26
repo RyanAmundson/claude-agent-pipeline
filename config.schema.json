@@ -40,6 +40,24 @@
         }
       }
     },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional. Opt-in external work sources the `import-sources` projector reads each cycle and writes into the filesystem queue as needs-work tickets (idempotent, one-way). NOT a backend — tickets still live in .pipeline/queue. Omit to disable.",
+      "properties": {
+        "beads": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, project each `bd ready` bead as a ticket id `bead:<beadId>`."
+        },
+        "plans": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Repo-relative (or ~-prefixed) dirs to scan for `*.md` plans. Each incomplete plan becomes one ticket id `plan:<dir>/<file>.md`. Use the same dirs the host UI scans so ids line up."
+        }
+      }
+    },
     "labelNamespace": {
       "type": "string",
       "default": "pipeline",
