@@ -1,7 +1,22 @@
 # Agent Read Model — a source of truth agents query
 
 **Date:** 2026-06-26
-**Status:** Design approved; spec scoped to **Slice 1 (`work_item`)** only.
+**Status:** Design approved. **Slice 1 (`work_item`) — poll-driven — BUILT & merged to main.** The webhook-push layer (relay + outbound connection; "Plan 2") is **SHELVED — keep on file, build only if needed** (see banner below).
+
+> **Webhook push SHELVED (2026-06-26):** After Slice 1's poll-driven mirror
+> shipped, we decided **not** to build the webhook relay. Rationale: webhooks
+> **cannot be local** — the provider initiates the connection, so receiving a
+> push *requires* a publicly reachable ingress (hosted relay or tunnel), which
+> breaks this project's local-first model. The only thing webhooks buy is lower
+> discovery latency (mirror freshness shrinks from one orchestrator-cycle to
+> seconds). That is **not a correctness gain**: the confirm-live-before-write
+> contract means staleness can never cause a bad mutation — a stale mirror only
+> delays *discovery* by at most one cycle. The local lever for fresher data is
+> simply the orchestrator poll cadence. **Revisit only if** Linear polling hits
+> rate limits at scale, or sub-cycle real-time reaction becomes a hard
+> requirement. The full relay design is preserved below for that case; resolved
+> sub-decisions if revived: outbound transport = **SSE**; hosting = open
+> (Proxmox container vs Cloudflare Worker vs tunnel-to-local).
 
 > **Store-substrate revision (2026-06-26, during planning):** The dedicated
 > SQLite store was dropped in favor of **reusing the existing filesystem-backend
