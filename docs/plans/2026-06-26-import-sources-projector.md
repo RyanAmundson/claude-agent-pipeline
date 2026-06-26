@@ -34,12 +34,30 @@ each cycle. One-way (never writes back). The existing orchestrator then routes t
 | each `bd ready` bead | `bead:<beadId>` | title, description, priority (0–4 verbatim), `labels:["source:beads"]`, `source:{type:"beads",beadId,issueType}` |
 | each **incomplete** plan `*.md` | `plan:<slug>` (one ticket, whole plan) | title (first `# ` heading or filename), priority (default 2), `labels:["source:plans"]`, `source:{type:"plans",path}` |
 
-- `<slug>` = deterministic, filesystem-safe transform of the plan's path relative to
-  its scan dir (lowercase, non-`[a-z0-9]`→`-`, collapse repeats, strip `.md`). Stable
-  across cycles.
 - **Plan completeness:** a plan is *complete* iff it contains ≥1 task checkbox and
   **all** are checked (`- [x]`); a plan with no checkboxes is treated as incomplete
-  (actionable). Complete plans are skipped.
+  (actionable). Complete plans are skipped. (Mirrors CM `parsePlanMeta`'s
+  `completedTasks === totalTasks && totalTasks > 0`.)
+
+### ID & filesystem-safety (cross-repo contract — VERIFIED against the shipped CM side)
+
+CM joins a work item to its pipeline ticket on `ticketId === ${entityType}:${entityId}`
+(`usePipelineTicketForEntity`), and CM's `PipelineRxWriter` sets `ticketId` from the
+ticket's **JSON `id` field** (not the filename). For a plan, CM's `entityId` is the
+plan **`relativePath`** = `${dirRel}/${filename}` (e.g. `docs/superpowers/plans/foo.md`),
+stamped by CM's scanner (`electron/ipc/plans.ts`). Therefore:
+
+- Ticket **JSON `id`** = `bead:<beadId>` / `plan:<relativePath>` — **verbatim**, so the
+  CM StageTimeline lights up. No slugification (a slug would break the join). No CM change.
+- Ticket **file basename** = `safeBasename(id)` = `id.replace(/[\/:]+/g, '_')` — flat,
+  portable (relativePath `/` would otherwise break the filename). So
+  `plan:docs/superpowers/plans/foo.md` → file `plan_docs_superpowers_plans_foo.md.json`,
+  JSON `id` stays `plan:docs/superpowers/plans/foo.md`. `bead:cm-x` → `bead_cm-x.json`.
+- **Idempotency is keyed on the basename** across all states (CAP's queue machinery is
+  filename-keyed; `getTicket`-by-id for these is a non-critical casualty of id≠basename).
+- The CAP projector must compute `relativePath` the SAME way CM does — repo-relative
+  `${dirRel}/${filename}` — so configure `sources.plans` with the same repo-relative
+  dirs CM scans (`.plans`, `.claude`, custom `planFolders`), resolved against `target`.
 
 ## Idempotency
 
