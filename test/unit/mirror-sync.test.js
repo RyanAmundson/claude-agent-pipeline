@@ -35,6 +35,36 @@ test('mapIssueToTicket: returns null when no pipeline state label present', () =
   assert.equal(mapIssueToTicket(issue, { namespace: 'pipeline', now: NOW }), null);
 });
 
+test('mapIssueToTicket: maps the flattened linear-certiv MCP shape', () => {
+  // Real shape from mcp__linear-certiv__list_issues: id (not identifier),
+  // labels as string[], assignee as string, priority as {value,name}.
+  const issue = {
+    id: 'CER-3850',
+    title: 'pipeline-improvement: orphaned runs leave PRs',
+    description: 'details',
+    priority: { value: 2, name: 'High' },
+    url: 'https://linear.app/certiv/issue/CER-3850',
+    assignee: 'Paul Allen',
+    labels: ['repo:api-server', 'pipeline:needs-triage', 'Bug'],
+    updatedAt: '2026-06-26T21:01:28.557Z',
+  };
+  const out = mapIssueToTicket(issue, { namespace: 'pipeline', now: NOW });
+  assert.equal(out.state, 'needs-triage');
+  assert.equal(out.ticket.id, 'CER-3850');
+  assert.equal(out.ticket.claim, 'Paul Allen');
+  assert.equal(out.ticket.priority, 2);
+  assert.deepEqual(out.ticket.labels, ['repo:api-server', 'pipeline:needs-triage', 'Bug']);
+  assert.equal(out.ticket.url, 'https://linear.app/certiv/issue/CER-3850');
+});
+
+test('mapIssueToTicket: null/unassigned flattened issue still maps with claim=null', () => {
+  const issue = { id: 'CER-3849', title: 'y', assignee: null, labels: ['pipeline:needs-triage'] };
+  const out = mapIssueToTicket(issue, { namespace: 'pipeline', now: NOW });
+  assert.equal(out.state, 'needs-triage');
+  assert.equal(out.ticket.claim, null);
+  assert.equal(out.ticket.priority, 99);
+});
+
 function tmpTarget() { return mkdtempSync(join(tmpdir(), 'mirror-')); }
 function qpath(t, state, id) { return join(t, '.pipeline', 'queue', state, `${id}.json`); }
 

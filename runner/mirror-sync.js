@@ -19,7 +19,7 @@ export function stateLabelRe(namespace) {
  */
 export function mapIssueToTicket(issue, opts) {
   const re = stateLabelRe(opts.namespace);
-  const labels = (issue.labels?.nodes ?? []).map((l) => l.name);
+  const labels = normalizeLabels(issue.labels);
   let state = null;
   for (const name of labels) {
     const m = re.exec(name);
@@ -27,12 +27,12 @@ export function mapIssueToTicket(issue, opts) {
   }
   if (!state) return null;
   const ticket = {
-    id: issue.identifier,
+    id: issue.identifier ?? issue.id,
     title: issue.title ?? '',
     description: issue.description ?? '',
-    priority: issue.priority ?? 99,
+    priority: normalizePriority(issue.priority),
     labels,
-    claim: issue.assignee?.displayName ?? null,
+    claim: normalizeAssignee(issue.assignee),
     url: issue.url ?? null,
     raw: issue,
     _syncedAt: opts.now,
@@ -40,6 +40,33 @@ export function mapIssueToTicket(issue, opts) {
     _source: 'reconcile',
   };
   return { ticket, state };
+}
+
+// Linear reaches us in two shapes depending on which tool produced it:
+//   - GraphQL-native: labels {nodes:[{name}]}, assignee {displayName}, priority <number>, identifier
+//   - flattened MCP (linear-certiv list_issues): labels [<string>], assignee <string>,
+//     priority {value,name}, id
+// Normalize both so the mirror maps regardless of producer.
+function normalizeLabels(labels) {
+  if (Array.isArray(labels)) {
+    return labels.map((l) => (typeof l === 'string' ? l : l?.name)).filter(Boolean);
+  }
+  if (Array.isArray(labels?.nodes)) {
+    return labels.nodes.map((l) => l?.name).filter(Boolean);
+  }
+  return [];
+}
+
+function normalizePriority(p) {
+  if (typeof p === 'number') return p;
+  if (p && typeof p === 'object' && typeof p.value === 'number') return p.value;
+  return 99;
+}
+
+function normalizeAssignee(a) {
+  if (a == null) return null;
+  if (typeof a === 'string') return a;
+  return a.displayName ?? a.name ?? null;
 }
 
 export const ALL_STATES = [...VALID_STATES];
