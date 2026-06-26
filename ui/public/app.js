@@ -13,12 +13,27 @@ const autoscrollEl = document.getElementById('autoscroll');
 const showSystemEl = document.getElementById('show-system');
 const clearBtn = document.getElementById('clear');
 
+// Project identity — so several dashboards open at once (one per product) are
+// distinguishable both in the header and, crucially, in the browser tab title.
+const projectNameEl = document.getElementById('project-name');
+const DEFAULT_TITLE = document.title;
+function applyProject(project) {
+  const label = project && (project.repo || project.name) || '';
+  if (projectNameEl) {
+    projectNameEl.textContent = label;
+    projectNameEl.title = (project && project.path) || '';
+    projectNameEl.hidden = !label;
+  }
+  document.title = label ? `${label} · agent-pipeline` : DEFAULT_TITLE;
+}
+
 // runId → agent name cache. Snapshot fetched once at startup; new runs are
 // resolved lazily by re-fetching when an unknown runId appears.
 const runAgents = new Map();
 async function loadSnapshot() {
   try {
     const snap = await fetch('/api/v1/snapshot').then(r => r.json());
+    applyProject(snap.project);
     for (const run of [...(snap.runs?.active || []), ...(snap.runs?.completed || [])]) {
       runAgents.set(run.runId, run.agent);
     }
@@ -454,6 +469,7 @@ let refetchTimer = null;
 
 function onSnapshot(snap) {
   latestSnap = snap;
+  applyProject(snap.project);
   // Cycles are append-only — once we have one, a later null snapshot (a race on
   // refetch) must not clear the strip.
   if (snap.cycle) {
