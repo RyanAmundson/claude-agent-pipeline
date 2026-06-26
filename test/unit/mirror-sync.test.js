@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mapIssueToTicket, applyMirror, reconcile } from '../../runner/mirror-sync.js';
+import { mapIssueToTicket, applyMirror, reconcile, runMirrorSync } from '../../runner/mirror-sync.js';
 
 const NOW = '2026-06-26T00:00:00.000Z';
 
@@ -97,5 +97,19 @@ test('reconcile: does not touch tickets already in terminal states', () => {
     const res = reconcile(t, [], { now: NOW });
     assert.equal(res.retired, 0);
     assert.ok(existsSync(qpath(t, 'done', 'CER-9')));
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test('runMirrorSync: maps issues, skips unmanaged, reconciles', () => {
+  const t = tmpTarget();
+  try {
+    const issues = [
+      { identifier: 'CER-1', title: 'a', labels: { nodes: [{ name: 'pipeline:needs-work' }] }, updatedAt: NOW },
+      { identifier: 'CER-2', title: 'b', labels: { nodes: [{ name: 'no-state' }] }, updatedAt: NOW }, // skipped
+    ];
+    const res = runMirrorSync(t, issues, { now: NOW });
+    assert.equal(res.mapped, 1);
+    assert.equal(res.skipped, 1);
+    assert.ok(existsSync(qpath(t, 'needs-work', 'CER-1')));
   } finally { rmSync(t, { recursive: true, force: true }); }
 });

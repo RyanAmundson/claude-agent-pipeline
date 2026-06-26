@@ -132,3 +132,20 @@ export function reconcile(target, entries, opts) {
   }
   return { applied, retired };
 }
+
+/**
+ * @param {string} target
+ * @param {any[]} rawIssues
+ * @param {{ namespace?: string, now: string }} opts
+ */
+export function runMirrorSync(target, rawIssues, opts) {
+  const namespace = opts.namespace ?? 'pipeline';
+  const entries = [];
+  let skipped = 0;
+  for (const issue of rawIssues) {
+    const mapped = mapIssueToTicket(issue, { namespace, now: opts.now });
+    if (mapped) entries.push(mapped); else skipped += 1;
+  }
+  const { applied, retired } = reconcile(target, entries, { now: opts.now });
+  return { mapped: entries.length, skipped, applied, retired };
+}
