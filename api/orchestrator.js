@@ -8,6 +8,13 @@ export const INITIAL_CADENCE_SECONDS = 270;
 export const IDLE_CADENCE_SECONDS = 1800;
 export const SUPERVISOR_TICK_MS = 15000;
 export const ORCHESTRATOR_CYCLE_PROMPT =
+  'MIRROR REFRESH (Linear backend only): Before surveying work, fetch the Linear issues this pipeline manages — ' +
+  'team config.linear.teamId, scoped by config.linear.projectFilter, excluding config.linear.excludeProjects / ' +
+  'excludeLabels — including each issue\'s labels, assignee, url, and updatedAt. ' +
+  'Write the raw issue array to .pipeline/mirror/issues.json, then run: ' +
+  '  agent-pipeline mirror sync --issues .pipeline/mirror/issues.json --target <repo> ' +
+  'This refreshes the local read mirror so every agent dispatched this cycle reads tickets locally instead of querying Linear. ' +
+  'Then survey the queue as usual. ' +
   'Run one orchestrator cycle: scan the pipeline, dispatch agents as needed, then call `agent-pipeline cycle report`.';
 
 export function orchestratorStatePath(target) {
@@ -57,6 +64,11 @@ export function writeOrchestratorState(target, patch) {
   writeFileSync(tmp, JSON.stringify(next, null, 2));
   renameSync(tmp, final);
   return next;
+}
+
+/** Stamps lastMirrorSyncAt into orchestrator state without clobbering other fields. */
+export function recordMirrorSync(target, { at }) {
+  writeOrchestratorState(target, { lastMirrorSyncAt: at });
 }
 
 /** Tier the cadence label from a cycle's nextCheckSeconds. */

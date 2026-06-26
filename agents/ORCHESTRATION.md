@@ -156,6 +156,12 @@ stateDiagram-v2
 | Review | Code review, bridge human comments back into the specialist loop, post-merge cleanup |
 | Utilities | On-demand helpers: branch isolation, reference resolution, terminology |
 
+## Read mirror (Linear backend)
+
+On the Linear backend, `.pipeline/queue/` is a **read mirror** — a local snapshot of Linear issues, refreshed at the start of each orchestrator cycle by running `agent-pipeline mirror sync`. Agents dispatched during a cycle read ticket state from this mirror (fast, no API calls) rather than querying Linear directly.
+
+**Mutation rule:** the mirror is read-only for agents. Before any mutation (status change, comment, field update), the agent must **confirm-live against Linear** via the Linear MCP to ensure the mirror snapshot is still current. (Full agent-level rules are detailed in Task 6.)
+
 ## Loop invariants
 
 - Every bug fix must leave Quality with at least one regression test (unit or E2E — spans both if logic + UI).
