@@ -30,3 +30,47 @@ export function foldConsoleFindings(verdict, consoleEvents = [], failOn = CONSOL
   }
   return { ...verdict, findings };
 }
+
+/** Default console source: <target>/.pipeline/evidence/<pr>/runtime-qa/<member>/console.json (JSON array). */
+export function consoleEventsOf(target, pr, memberId) {
+  const p = join(target, '.pipeline', 'evidence', String(pr), 'runtime-qa', memberId, 'console.json');
+  if (!existsSync(p)) return [];
+  try { const j = JSON.parse(readFileSync(p, 'utf8')); return Array.isArray(j) ? j : []; }
+  catch { return []; }
+}
+
+/**
+ * Fan out matched runtime-QA members for a PR, persist verdicts, compute the gate.
+ * @param {{target:string, pr:string|number, changedFiles:Array<{path:string}>,
+ *          members?:any[], qaPrompt:(m:any)=>string, config?:any}} o
+ * @param {{dispatch?:Function, finalMessageOf?:Function, consoleEventsOf?:Function}} [deps]
+ */
+export async function runRuntimeQaGate({ target, pr, changedFiles, members = MEMBERS, qaPrompt, config = {} }, deps = {}) {
+  const dispatchFn = deps.dispatch || dispatch;
+  const readFinal = deps.finalMessageOf || finalMessageOf;
+  const readConsole = deps.consoleEventsOf || consoleEventsOf;
+  const memberCfg = config.members || {};
+  const consoleEnabled = config.consoleErrors?.enabled !== false;
+  const failOn = config.consoleErrors?.failOn || CONSOLE_FAIL_DEFAULT;
+
+  const active = matchMembers(members, changedFiles)
+    .filter(m => memberCfg[m.id]?.enabled !== false);
+
+  const reviewsDir = join(target, '.pipeline', 'reviews', String(pr));
+  mkdirSync(reviewsDir, { recursive: true });
+
+  const verdicts = await Promise.all(active.map(async (m) => {
+    const h = dispatchFn({ agent: m.agent, prompt: qaPrompt(m), target, model: m.model });
+    const run = await h.result;
+    let verdict = run.status === 'completed'
+      ? extractVerdict(readFinal(target, run.runId))
+      : { verdict: 'veto', findings: [], reason: 'malformed-or-missing' }; // crash → fail-closed
+    if (consoleEnabled) verdict = foldConsoleFindings(verdict, readConsole(target, pr, m.id), failOn);
+    writeFileSync(join(reviewsDir, `runtime-qa-${m.id}.json`), JSON.stringify({ member: m.id, ...verdict }, null, 2));
+    return verdict;
+  }));
+
+  const result = computeGate(verdicts);
+  writeFileSync(join(reviewsDir, 'runtime-qa-gate.json'), JSON.stringify(result, null, 2));
+  return result;
+}
