@@ -46,6 +46,10 @@ header h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.5px;
   padding: 4px 10px; border-radius: 4px; cursor: pointer; font: inherit;
 }
 .controls button:hover { color: var(--text); border-color: var(--text); }
+.controls button:disabled { opacity: 0.4; cursor: default; }
+.controls button:disabled:hover { color: var(--dim); border-color: var(--line); }
+.controls button.danger { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--line)); }
+.controls button.danger:hover:not(:disabled) { color: #fff; background: var(--err); border-color: var(--err); }
 .status { color: var(--dim); }
 .status.ok { color: var(--ok); }
 .status.err { color: var(--err); }

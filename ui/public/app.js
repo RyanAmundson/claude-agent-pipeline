@@ -459,6 +459,64 @@ async function renderAgents() {
   updateAgentStatuses(snap);
 }
 
+// ─── Control plane (start orchestrator / hard reset) ─────────────────────
+// POST /api/v1/orchestrator/start and POST /api/v1/reset. Button enablement
+// reflects the latest snapshot: start is disabled while the orchestrator is
+// running; kill-all shows the live active-run count.
+const startOrchBtn = document.getElementById('orchestrator-start');
+const hardResetBtn = document.getElementById('hard-reset');
+
+function flashStatus(msg, kind) {
+  statusEl.textContent = msg;
+  statusEl.className = `status ${kind || ''}`.trim();
+}
+
+function updateControls(snap) {
+  const running = snap?.orchestrator?.state === 'running';
+  const active = snap?.runs?.activeCount ?? 0;
+  if (startOrchBtn) {
+    startOrchBtn.disabled = running;
+    startOrchBtn.textContent = running ? 'orchestrator running' : 'start orchestrator';
+  }
+  if (hardResetBtn) {
+    hardResetBtn.disabled = !running && active === 0;
+    hardResetBtn.textContent = active > 0 ? `kill all (${active})` : 'kill all';
+  }
+}
+
+async function postControl(path) {
+  const r = await fetch(path, { method: 'POST' });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+if (startOrchBtn) startOrchBtn.addEventListener('click', async () => {
+  startOrchBtn.disabled = true;
+  try {
+    const r = await postControl('/api/v1/orchestrator/start');
+    flashStatus(r.alreadyRunning
+      ? `orchestrator already running (pid ${r.supervisorPid})`
+      : `orchestrator started (pid ${r.supervisorPid})`, 'ok');
+  } catch (err) {
+    flashStatus(`start failed: ${err.message}`, 'err');
+    startOrchBtn.disabled = false;
+  }
+});
+
+if (hardResetBtn) hardResetBtn.addEventListener('click', async () => {
+  const active = latestSnap?.runs?.activeCount ?? 0;
+  if (!confirm(`Hard reset: stop the orchestrator and SIGTERM ${active} in-flight agent run${active === 1 ? '' : 's'}. Continue?`)) return;
+  hardResetBtn.disabled = true;
+  try {
+    const r = await postControl('/api/v1/reset');
+    const n = r.runs?.killed?.length ?? 0;
+    flashStatus(`hard reset — killed ${n} run${n === 1 ? '' : 's'}, orchestrator stopped`, 'ok');
+  } catch (err) {
+    flashStatus(`reset failed: ${err.message}`, 'err');
+    hardResetBtn.disabled = false;
+  }
+});
+
 // ─── Live status feed ───────────────────────────────────────────────────
 // /api/v1/events replays a snapshot on connect and pushes ticket.* / run.*
 // diffs as they happen. Any diff triggers one debounced snapshot refetch,
@@ -480,6 +538,7 @@ function onSnapshot(snap) {
     runAgents.set(run.runId, run.agent);
   }
   renderCycle();
+  updateControls(snap);
   if (agentsBuilt) updateAgentStatuses(snap);
   else if (document.body.dataset.view === 'agents') renderAgents();
 }

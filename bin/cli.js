@@ -585,7 +585,6 @@ async function runOrchestrator(positional, flags) {
   const sub = positional[0] || 'status';
   const target = targetOf(flags);
   const orch = await import('../api/orchestrator.js');
-  const { isProcessAlive } = await import('../api/runs.js');
 
   const emit = (obj, line) => { if (flags.json) console.log(JSON.stringify(obj)); else console.log(line); };
 
@@ -612,11 +611,8 @@ async function runOrchestrator(positional, flags) {
       return;
     }
     case 'stop': {
-      const cur = orch.readOrchestratorState(target);
-      orch.writeOrchestratorState(target, { state: 'stopped', nextFireAt: null, supervisorPid: null });
-      if (cur?.supervisorPid && isProcessAlive(cur.supervisorPid)) {
-        try { process.kill(cur.supervisorPid, 'SIGTERM'); } catch {}
-      }
+      const { stopOrchestrator } = await import('../api/control.js');
+      stopOrchestrator(target);
       emit({ stopped: true }, `orchestrator stopped`);
       return;
     }
@@ -789,17 +785,11 @@ async function runSupervise(positional, flags) {
   process.exit(final.status === 'completed' ? 0 : 1);
 }
 
-function detachOrchestratorSupervisor(target) {
-  const child = spawn(process.execPath, [
-    fileURLToPath(import.meta.url), '_orchestrate-supervise', '--target', target,
-  ], { detached: true, stdio: 'ignore', cwd: target, env: process.env });
-  child.unref();
-  return child.pid;
-}
 
 async function orchestratorRestart(target, flags) {
   const orch = await import('../api/orchestrator.js');
   const { isProcessAlive, listRuns } = await import('../api/runs.js');
+  const { detachOrchestratorSupervisor } = await import('../api/control.js');
   // Kill any in-flight orchestrator cycle run (leaves other agent runs alone).
   for (const r of listRuns({ target }).active) {
     if (r.agent === 'orchestrator' && r.pid) { try { process.kill(r.pid, 'SIGTERM'); } catch {} }
@@ -817,18 +807,13 @@ async function orchestratorRestart(target, flags) {
 }
 
 async function orchestratorStart(target, flags) {
-  const orch = await import('../api/orchestrator.js');
-  const { isProcessAlive } = await import('../api/runs.js');
-  const cur = orch.readOrchestratorState(target);
-  if (cur && cur.supervisorPid && isProcessAlive(cur.supervisorPid)) {
-    die(`orchestrator supervisor already running (pid ${cur.supervisorPid}); use 'resume' to unpause or 'restart' to force a fresh cycle`);
+  const { startOrchestrator } = await import('../api/control.js');
+  const r = startOrchestrator(target);
+  if (r.alreadyRunning) {
+    die(`orchestrator supervisor already running (pid ${r.supervisorPid}); use 'resume' to unpause or 'restart' to force a fresh cycle`);
   }
-  // Mark running and due-now BEFORE detaching, so the supervisor's first tick dispatches.
-  orch.writeOrchestratorState(target, { state: 'running', cadence: 'initial', nextFireAt: new Date().toISOString() });
-  const pid = detachOrchestratorSupervisor(target);
-  orch.writeOrchestratorState(target, { supervisorPid: pid });
-  if (flags.json) console.log(JSON.stringify({ started: true, supervisorPid: pid }));
-  else console.log(`orchestrator started (supervisor pid ${pid})`);
+  if (flags.json) console.log(JSON.stringify({ started: true, supervisorPid: r.supervisorPid }));
+  else console.log(`orchestrator started (supervisor pid ${r.supervisorPid})`);
 }
 
 async function runOrchestrateSupervise(flags) {

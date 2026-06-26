@@ -9,6 +9,8 @@
 //   GET /api/v1/agent/:name     → JSON Agent  | 404
 //   GET /api/v1/events          → text/event-stream of WatcherEvent
 //   GET /api/v1/log?limit=N     → text/event-stream of RunEvent (with runId added)
+//   POST /api/v1/orchestrator/start → start the orchestrator supervisor
+//   POST /api/v1/reset          → hard reset: stop orchestrator + kill all runs
 //
 // No runtime dependencies. Node stdlib only.
 
@@ -17,6 +19,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createWatcher, getAgent, getTicket, readSnapshot } from '../api/index.js';
+import { hardReset, startOrchestrator } from '../api/control.js';
 import { createLogStream } from './log-stream.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -102,10 +105,12 @@ function route(req, res, apiOpts, sseClients, logClients, logStream) {
   const url = new URL(req.url, 'http://x');
   const path = url.pathname;
 
-  if (req.method !== 'GET') return sendJson(res, 405, { error: 'method not allowed' });
-
   // CORS for localhost tooling
   res.setHeader('Access-Control-Allow-Origin', '*');
+
+  // Control plane: state-changing actions (start orchestrator, hard reset).
+  if (req.method === 'POST') return routePost(res, apiOpts, path);
+  if (req.method !== 'GET') return sendJson(res, 405, { error: 'method not allowed' });
 
   if (path === '/' || path === '/index.html') return sendStatic(res, 'index.html');
   if (path.startsWith('/public/'))            return sendStatic(res, path.replace(/^\/public\//, ''));
@@ -132,6 +137,16 @@ function route(req, res, apiOpts, sseClients, logClients, logStream) {
   if (path === '/api/v1/events') return openSse(req, res, sseClients, apiOpts);
   if (path === '/api/v1/log')    return openLogSse(req, res, logClients, logStream, url);
 
+  return sendJson(res, 404, { error: 'not found', path });
+}
+
+function routePost(res, apiOpts, path) {
+  if (path === '/api/v1/orchestrator/start') {
+    return sendJson(res, 200, startOrchestrator(apiOpts.target));
+  }
+  if (path === '/api/v1/reset') {
+    return sendJson(res, 200, hardReset(apiOpts.target));
+  }
   return sendJson(res, 404, { error: 'not found', path });
 }
 
