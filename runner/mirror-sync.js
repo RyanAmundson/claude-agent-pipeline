@@ -47,12 +47,12 @@ export function mapIssueToTicket(issue, opts) {
   return { ticket, state };
 }
 
-const ALL_STATES = [...VALID_STATES];
+export const ALL_STATES = [...VALID_STATES];
 
-function queueDir(target) { return join(resolve(target), '.pipeline', 'queue'); }
-function ticketPath(target, state, id) { return join(queueDir(target), state, `${id}.json`); }
+export function queueDir(target) { return join(resolve(target), '.pipeline', 'queue'); }
+export function ticketPath(target, state, id) { return join(queueDir(target), state, `${id}.json`); }
 
-function writeAtomic(path, obj) {
+export function writeAtomic(path, obj) {
   mkdirSync(join(path, '..'), { recursive: true });
   const tmp = `${path}.tmp.${process.pid}`;
   writeFileSync(tmp, JSON.stringify(obj, null, 2));
@@ -97,4 +97,38 @@ export function applyMirror(target, entries, _opts) {
     else { writeAtomic(dest, ticket); res.updated += 1; }
   }
   return res;
+}
+
+function readMirrorIds(target) {
+  const out = []; // [{ id, state }]
+  for (const state of ALL_STATES) {
+    const dir = join(queueDir(target), state);
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir)) {
+      if (f.endsWith('.json')) out.push({ id: f.slice(0, -5), state });
+    }
+  }
+  return out;
+}
+
+/**
+ * @param {string} target
+ * @param {Array<{ ticket: object, state: string }>} entries  fetched, normalized
+ * @param {{ now: string, terminalStates?: string[] }} opts
+ */
+export function reconcile(target, entries, opts) {
+  const terminal = new Set(opts.terminalStates ?? ['done', 'obsolete']);
+  const applied = applyMirror(target, entries, { now: opts.now });
+  const fetchedIds = new Set(entries.map((e) => e.ticket.id));
+  let retired = 0;
+  for (const { id, state } of readMirrorIds(target)) {
+    if (fetchedIds.has(id) || terminal.has(state)) continue;
+    const ticket = JSON.parse(readFileSync(ticketPath(target, state, id), 'utf8'));
+    ticket._source = 'reconcile';
+    ticket._syncedAt = opts.now;
+    unlinkSync(ticketPath(target, state, id));
+    writeAtomic(ticketPath(target, 'obsolete', id), ticket);
+    retired += 1;
+  }
+  return { applied, retired };
 }

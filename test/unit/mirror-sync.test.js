@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mapIssueToTicket, applyMirror } from '../../runner/mirror-sync.js';
+import { mapIssueToTicket, applyMirror, reconcile } from '../../runner/mirror-sync.js';
 
 const NOW = '2026-06-26T00:00:00.000Z';
 
@@ -68,5 +68,34 @@ test('applyMirror: moves a ticket when its state changed', () => {
     assert.equal(res.moved, 1);
     assert.ok(!existsSync(qpath(t, 'needs-work', 'CER-1')));
     assert.ok(existsSync(qpath(t, 'in-progress', 'CER-1')));
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test('reconcile: retires a mirror ticket absent from the fetched set', () => {
+  const t = tmpTarget();
+  try {
+    // seed two tickets via a first reconcile
+    reconcile(t, [
+      { ticket: { id: 'CER-1', _syncedAt: NOW }, state: 'needs-work' },
+      { ticket: { id: 'CER-2', _syncedAt: NOW }, state: 'in-progress' },
+    ], { now: NOW });
+    // second fetch only contains CER-1 → CER-2 must be retired
+    const res = reconcile(t, [
+      { ticket: { id: 'CER-1', _syncedAt: NOW }, state: 'needs-work' },
+    ], { now: NOW });
+    assert.equal(res.retired, 1);
+    assert.ok(existsSync(qpath(t, 'obsolete', 'CER-2')));
+    assert.ok(!existsSync(qpath(t, 'in-progress', 'CER-2')));
+  } finally { rmSync(t, { recursive: true, force: true }); }
+});
+
+test('reconcile: does not touch tickets already in terminal states', () => {
+  const t = tmpTarget();
+  try {
+    mkdirSync(join(t, '.pipeline', 'queue', 'done'), { recursive: true });
+    writeFileSync(qpath(t, 'done', 'CER-9'), JSON.stringify({ id: 'CER-9' }, null, 2));
+    const res = reconcile(t, [], { now: NOW });
+    assert.equal(res.retired, 0);
+    assert.ok(existsSync(qpath(t, 'done', 'CER-9')));
   } finally { rmSync(t, { recursive: true, force: true }); }
 });
