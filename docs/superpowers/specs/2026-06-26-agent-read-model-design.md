@@ -3,6 +3,17 @@
 **Date:** 2026-06-26
 **Status:** Design approved; spec scoped to **Slice 1 (`work_item`)** only.
 
+> **Store-substrate revision (2026-06-26, during planning):** The dedicated
+> SQLite store was dropped in favor of **reusing the existing filesystem-backend
+> queue layout** (`.pipeline/queue/<state>/` JSON), after discovering the
+> filesystem backend is already a zero-dependency local read model served by the
+> existing `ui/server.js` HTTP/SSE + `fs.watch`. The Linear backend gets a
+> **local mirror** in that same layout; agents read it through the existing
+> filesystem-backend code path. No new store engine, no new API, no native
+> dependency. The relay / sync / backfill / reconciliation / confirm-live design
+> below is unchanged — only the substrate changed. Sections below are written to
+> the revised substrate.
+
 ## Problem
 
 Every dispatched agent makes **live queries** to the work-item backend (Linear /
@@ -44,14 +55,16 @@ Three actors with clean boundaries:
    GitHub  ┼─ webhooks ──▶  RELAY  ◀── SSE/WS outbound ── ORCHESTRATOR LOOP        │
            ┘  (push)     (public,      (local; the only   │  ├─ sync engine        │
                           buffers)      persistent proc)   │  │   apply events →    │
-                                                           │  │   READ STORE  ◀──┐  │
-        backfill + reconciliation poll ───────────────────┘  │   (SQLite)       │  │
-        (slow backstop, direct to provider APIs)              │   HTTP/SSE API ──┘  │
-                                                              └────────┬──────────┘ │
-                                                                       │            │
-                          dispatched agents ── read ──▶ /api/v1/store/* (local)     │
-                          (short-lived procs)  └─ confirm-live before any write ──▶ provider
-                                                              dashboard ── subscribe ▶ same store
+                                                           │  │  .pipeline/queue/ ◀┐ │
+        backfill + reconciliation poll ───────────────────┘  │   <state>/*.json   │ │
+        (slow backstop, direct to provider APIs)              │   (the mirror)     │ │
+                                                              │   ui/server.js ────┘ │
+                                                              │   HTTP/SSE + fs.watch│
+                                                              └────────┬──────────┘  │
+                                                                       │             │
+            dispatched agents ── read mirror (fs-backend path) ◀───────┘             │
+            (short-lived procs) └─ confirm-live before any write ──▶ provider        │
+                                          dashboard ── existing SSE ▶ same mirror     │
 ```
 
 ### Relay (hosted, tiny — slice-1 deliverable)
@@ -93,13 +106,21 @@ reconciliation (slow)   ─┘                  (idempotent upsert by externalId
 - **Relay reconnect** asks for replay since the last-acked cursor; any gap is
   swept by reconciliation.
 
-### Read store (SQLite, behind the existing HTTP API)
+### Read store (the `.pipeline/queue/` mirror — reuses the filesystem backend)
 
-- Single embedded SQLite file (`better-sqlite3`) owned by the orchestrator
-  process. Nobody writes through it except `applyToStore`.
-- Exposed only via the **typed read API** (below). Agents and the dashboard read
-  it; agents never open the DB file directly (they are separate processes).
-- Live changes pushed to the **dashboard over the existing SSE channel**.
+- The Linear backend's mirror is written into the **same on-disk layout the
+  filesystem backend already uses**: `.pipeline/queue/<state>/<externalId>.json`,
+  state encoded by subdirectory. `applyToStore` is the only writer.
+- **No new store engine, no native dependency, no new API.** The existing
+  `ui/server.js` HTTP/SSE server already reads this layout and pushes changes via
+  `fs.watch` — it serves the mirror unchanged.
+- Agents read the mirror through the **existing filesystem-backend read path**
+  (the `queue/queue-list.sh` / `queue/*.sh` helpers + read API), so a Linear-backed
+  pipeline and a filesystem-backed pipeline present an **identical read interface**
+  to agents — that is the decoupling win, achieved with no new surface.
+- "Filter by state" is "list a subdirectory"; "get by id" is "read a JSON file".
+  Adequate for a working-set backlog (dozens–hundreds of tickets); no indexing
+  layer needed (YAGNI vs. SQLite).
 
 ## The read/write contract
 
@@ -126,25 +147,35 @@ run          { runId, agent, status, startedAt, events[]|eventsRef, _syncedAt, .
 finding      { id, detector, paths[], severity, status, producedByRun, _syncedAt, ... }           # slice 4
 ```
 
+- `work_item` is persisted as a filesystem-backend **ticket JSON file** (same
+  shape the `queue/` helpers already read/write), extended with the three sync
+  fields. State = which `<state>/` subdir it lives in.
 - `_syncedAt` powers the reconciliation diff and lets an agent observe
   staleness.
 - `_source` distinguishes a confirmed webhook update from a backfilled/reconciled
   guess.
 
-## Read API (the product)
+## Read interface (the product) — reuse, don't build
 
-A typed, backend-agnostic surface. Indicative shape (finalize in the plan):
+The decoupling win is delivered by making a Linear-backed pipeline present the
+**same read interface as the filesystem backend**, not by adding new routes:
 
-```
-GET  /api/v1/store/work-items?state=&label=&claim=&backend=    → WorkItem[]
-GET  /api/v1/store/work-items/:externalId                      → WorkItem
-GET  /api/v1/store/stream                                      → SSE: row changes (dashboard + future reactive agents)
-GET  /api/v1/store/health                                      → { lastWebhookAt, lastReconcileAt, relayConnected, rowCounts }
-```
+- **Agents** read via the existing `queue/` helpers (`queue-list.sh`,
+  `queue-history.sh`, etc.) and the read API in `api/index.js` — unchanged. They
+  stop branching on backend because the mirror *is* a filesystem queue.
+- **Dashboard** reads via the existing `ui/server.js` HTTP/SSE + `fs.watch` —
+  unchanged.
+- **Sync metadata** (`_syncedAt` / `_source`) is added to the ticket JSON shape;
+  readers that don't care ignore it; reconciliation and staleness checks consume
+  it.
+- **`confirm-live`** stays a direct **provider (Linear MCP)** call before a
+  mutation — never a store path. The mirror is read-only by construction (only
+  `applyToStore` writes it).
 
-The API normalizes Linear and GitHub into one `WorkItem` shape so callers never
-branch on backend. `confirm-live` stays a provider call (not a store route) —
-the store deliberately does not offer a write path.
+The only genuinely new health surface is a small sync-status readout
+(`lastWebhookAt`, `lastReconcileAt`, `relayConnected`, mirror row counts) so the
+dashboard and agents can tell whether the mirror is warm; fold it into the
+existing orchestrator-state read rather than a new endpoint.
 
 ## Sequencing
 
