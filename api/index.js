@@ -131,6 +131,20 @@ function resolvePluginRoot(opts) {
   return opts?.pluginRoot ? resolve(opts.pluginRoot) : PLUGIN_ROOT;
 }
 
+// Human-meaningful identity for the target project, so a dashboard watching
+// several products at once can show which one this instance is for. `name` is
+// always present (the target dir's basename); `repo` is the configured slug
+// (config.repo) when set, else null. Absent/malformed config → repo null.
+function readProjectMeta(target) {
+  let repo = null;
+  const cfgPath = join(target, '.pipeline', 'config.json');
+  if (existsSync(cfgPath)) {
+    try { repo = JSON.parse(readFileSync(cfgPath, 'utf8')).repo || null; }
+    catch { /* malformed config → fall back to the dir name only */ }
+  }
+  return { name: basename(target), repo, path: target };
+}
+
 /**
  * Read a full point-in-time snapshot of agents + tickets for a target project.
  * Pure function — no watchers, no side effects.
@@ -190,6 +204,7 @@ export function readSnapshot(opts) {
   return {
     apiVersion: API_VERSION,
     target,
+    project: readProjectMeta(target),
     generatedAt: new Date().toISOString(),
     states: STATES,
     featureStates: FEATURE_STATES,
