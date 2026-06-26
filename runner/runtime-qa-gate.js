@@ -65,7 +65,7 @@ export async function runRuntimeQaGate({ target, pr, changedFiles, members = MEM
     let verdict = run.status === 'completed'
       ? extractVerdict(readFinal(target, run.runId))
       : { verdict: 'veto', findings: [], reason: 'malformed-or-missing' }; // crash → fail-closed
-    if (consoleEnabled) verdict = foldConsoleFindings(verdict, readConsole(target, pr, m.id), failOn);
+    if (consoleEnabled && run.status === 'completed') verdict = foldConsoleFindings(verdict, readConsole(target, pr, m.id), failOn);
     writeFileSync(join(reviewsDir, `runtime-qa-${m.id}.json`), JSON.stringify({ member: m.id, ...verdict }, null, 2));
     return verdict;
   }));

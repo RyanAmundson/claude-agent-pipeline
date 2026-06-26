@@ -1,10 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { foldConsoleFindings, CONSOLE_FAIL_DEFAULT } from '../../runner/runtime-qa-gate.js';
+import { foldConsoleFindings, CONSOLE_FAIL_DEFAULT, runRuntimeQaGate } from '../../runner/runtime-qa-gate.js';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runRuntimeQaGate } from '../../runner/runtime-qa-gate.js';
 
 test('an uncaught console event folds in as a major finding', () => {
   const out = foldConsoleFindings({ verdict: 'pass', findings: [] }, [{ kind: 'uncaught', text: 'boom' }]);
