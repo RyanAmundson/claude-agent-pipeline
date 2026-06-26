@@ -23,7 +23,7 @@ const PLUGIN_ROOT = resolve(__dirname, '..');
 
 export const API_VERSION = 1;
 
-// The 14 queue states, in pipeline order. Anything in `in-progress` is "active".
+// The 15 queue states, in pipeline order. Anything in `in-progress` is "active".
 // `obsolete` is terminal (retired as no-longer-relevant) — distinct from `done`.
 // `needs-conflict-resolution` is a detour that displaces `ready-for-human` while a PR
 // conflicts with main (conflict-resolver returns it to `ready-for-human` once clean).
@@ -38,6 +38,7 @@ export const STATES = Object.freeze([
   'needs-code-review',
   'needs-detector-gate',
   'needs-regression-check',
+  'needs-runtime-qa',
   'needs-feature-validation',
   'needs-feedback',
   'needs-conflict-resolution',

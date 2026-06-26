@@ -201,6 +201,40 @@
         }
       }
     },
+    "runtimeQa": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The needs-runtime-qa fan-out gate: drives the running app and proves runtime correctness per PR. Absent ⇒ defaults apply.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "When false, regression-tester advances straight to needs-feature-validation with no runtime-QA panel."
+        },
+        "members": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "interaction": { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean", "default": true } } },
+            "visual":      { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean", "default": true } } },
+            "state":       { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean", "default": true } } },
+            "network":     { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean", "default": true }, "allowedHosts": { "type": "array", "items": { "type": "string" }, "default": [] } } },
+            "data":        { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean", "default": true }, "everyPr": { "type": "boolean", "default": true } } },
+            "responsive":  { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean", "default": true }, "breakpoints": { "type": "array", "items": { "type": "integer" }, "default": [375, 768, 1280] } } },
+            "a11y":        { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean", "default": true } } },
+            "perf":        { "type": "object", "additionalProperties": false, "properties": { "enabled": { "type": "boolean", "default": true }, "budgets": { "type": "object", "additionalProperties": false, "properties": { "inpMs": { "type": "integer", "default": 200 }, "cls": { "type": "number", "default": 0.1 } } } } }
+          }
+        },
+        "consoleErrors": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "failOn": { "type": "array", "items": { "type": "string" }, "default": ["uncaught", "hydration"] }
+          }
+        }
+      }
+    },
     "maxAutoFixDiffLines": {
       "type": "integer",
       "default": 150,
