@@ -20,3 +20,10 @@ const t = snap.tickets.byState['needs-work']?.find(x => x.id === 'CER-100');
 if (!t) { console.error('FAIL: CER-100 not in needs-work snapshot'); process.exit(1); }
 console.log('OK: mirror ticket visible via readSnapshot');
 "
+
+node --input-type=module -e "
+import { readOrchestratorState } from '$ROOT/api/orchestrator.js';
+const s = readOrchestratorState('$WORK');
+if (!s || !s.lastMirrorSyncAt) { console.error('FAIL: lastMirrorSyncAt not stamped'); process.exit(1); }
+console.log('OK: lastMirrorSyncAt stamped');
+"

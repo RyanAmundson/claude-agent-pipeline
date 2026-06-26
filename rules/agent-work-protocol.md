@@ -27,6 +27,8 @@ holds the state you read from the mirror, then write live to Linear. Never treat
 the mirror as authority for a decision to mutate. The mirror self-heals from your
 write on the next cycle — do not hand-edit mirror files.
 
+Exception: a dedup/freshness guard that gates a *create* (searching Linear to avoid making a duplicate) MUST read Linear live — the mirror can lag a full cycle, and a missed duplicate is the failure being prevented.
+
 ---
 
 ## Process Management (CRITICAL)

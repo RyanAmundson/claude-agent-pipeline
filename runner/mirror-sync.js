@@ -4,14 +4,9 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { STATES } from '../api/index.js';
 
-const VALID_STATES = new Set([
-  'needs-triage', 'needs-review', 'needs-work', 'in-progress',
-  'needs-test-review', 'needs-code-review', 'needs-detector-gate',
-  'needs-regression-check', 'needs-runtime-qa', 'needs-feature-validation',
-  'needs-feedback', 'needs-conflict-resolution', 'ready-for-human', 'done',
-  'needs-info', 'obsolete',
-]);
+const VALID_STATES = new Set(STATES);
 
 export function stateLabelRe(namespace) {
   return new RegExp(`^${namespace}:(.+)$`);

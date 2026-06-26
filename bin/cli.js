@@ -7,6 +7,7 @@ import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync, execFileSync, spawn } from 'node:child_process';
 import { runMirrorSync } from '../runner/mirror-sync.js';
+import { recordMirrorSync } from '../api/orchestrator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -657,7 +658,9 @@ function runMirror(positional, flags) {
   try { raw = JSON.parse(readFileSync(flags.issues, 'utf8')); }
   catch (e) { console.error(`mirror sync: cannot read ${flags.issues}: ${e.message}`); process.exit(1); }
   const issues = Array.isArray(raw) ? raw : (raw.issues ?? []);
-  const res = runMirrorSync(target, issues, { namespace, now: new Date().toISOString() });
+  const now = new Date().toISOString();
+  const res = runMirrorSync(target, issues, { namespace, now });
+  recordMirrorSync(target, { at: now });
   console.log(`mirror sync: mapped ${res.mapped}, skipped ${res.skipped}, retired ${res.retired}`);
   process.exit(0);
 }
